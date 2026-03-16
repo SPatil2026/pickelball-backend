@@ -1,0 +1,177 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  OWNER
+  BOOKER
+  ADMIN
+}
+
+enum SlotStatus {
+  AVAILABLE
+  BOOKED
+  BLOCKED
+}
+
+enum BookingStatus {
+  CONFIRMED
+  CANCELLED
+  RESCHEDULED
+}
+
+enum DayType {
+  WEEKDAY
+  WEEKEND
+}
+
+model Users {
+  user_id       String   @id @default(uuid())
+  name          String
+  email         String   @unique
+  password_hash String
+  role          Role
+  phone         String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  venues        Venue[]
+  bookings      Bookings[]
+  carts         Cart[]
+}
+
+model Venue {
+  venue_id       String   @id @default(uuid())
+  name           String
+  address        String
+  owner_id       String
+  contact_number String
+  email          String
+  opening_time   DateTime
+  closing_time   DateTime
+  created_at     DateTime @default(now())
+
+  owner          Users      @relation(fields: [owner_id], references: [user_id])
+  courts         Court[]
+  images         CourtImages[]
+  pricing        Pricing[]
+}
+
+model Court {
+  court_id   String   @id @default(uuid())
+  venue_id   String
+  court_number Int
+  created_at DateTime @default(now())
+
+  venue      Venue       @relation(fields: [venue_id], references: [venue_id])
+  slots      CourtSlots[]
+  bookings   Bookings[]
+}
+
+model CourtImages {
+  image_id     String  @id @default(uuid())
+  venue_id     String
+  image_url    String
+  is_thumbnail Boolean @default(false)
+
+  venue        Venue   @relation(fields: [venue_id], references: [venue_id])
+}
+
+model Pricing {
+  price_id       String  @id @default(uuid())
+  venue_id       String
+  day_type       DayType
+  price_per_hour Float
+
+  venue          Venue   @relation(fields: [venue_id], references: [venue_id])
+}
+
+model CourtSlots {
+  slot_id     String     @id @default(uuid())
+  court_id    String
+  date        DateTime
+  start_time  DateTime
+  end_time    DateTime
+  status      SlotStatus
+
+  court       Court      @relation(fields: [court_id], references: [court_id])
+  bookingSlots BookingSlots[]
+  cartItems    CartItems[]
+}
+
+model Bookings {
+  booking_id   String        @id @default(uuid())
+  user_id      String
+  court_id     String
+  date         DateTime
+  start_time   DateTime
+  end_time     DateTime
+  total_amount Float
+  status       BookingStatus
+  created_at   DateTime      @default(now())
+
+  user         Users         @relation(fields: [user_id], references: [user_id])
+  court        Court         @relation(fields: [court_id], references: [court_id])
+
+  slots        BookingSlots[]
+  payments     Payments[]
+  reschedules  Reschedules[]
+}
+
+model BookingSlots {
+  booking_slot_id String @id @default(uuid())
+  booking_id      String
+  slot_id         String
+
+  booking         Bookings   @relation(fields: [booking_id], references: [booking_id])
+  slot            CourtSlots @relation(fields: [slot_id], references: [slot_id])
+}
+
+model Cart {
+  cart_id    String   @id @default(uuid())
+  user_id    String
+  created_at DateTime @default(now())
+
+  user       Users     @relation(fields: [user_id], references: [user_id])
+  items      CartItems[]
+}
+
+model CartItems {
+  cart_item_id String @id @default(uuid())
+  cart_id      String
+  slot_id      String
+  price        Float
+
+  cart         Cart       @relation(fields: [cart_id], references: [cart_id])
+  slot         CourtSlots @relation(fields: [slot_id], references: [slot_id])
+}
+
+model Payments {
+  payment_id     String   @id @default(uuid())
+  booking_id     String
+  amount         Float
+  payment_status String
+  payment_method String
+  paid_at        DateTime
+
+  booking        Bookings @relation(fields: [booking_id], references: [booking_id])
+}
+
+model Reschedules {
+  reschedule_id String   @id @default(uuid())
+  booking_id    String
+  old_slot_id   String
+  new_slot_id   String
+  rescheduled_at DateTime @default(now())
+
+  booking       Bookings   @relation(fields: [booking_id], references: [booking_id])
+}
