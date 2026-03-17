@@ -49,7 +49,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
             },
         });
 
-        const token = createToken(user.user_id, user.email, "7d");
+        const token = createToken(user.user_id, user.role, user.email, "7d");
 
         res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
 
@@ -87,7 +87,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
             return;
         }
 
-        const token = createToken(user.user_id, user.email, "7d");
+        const token = createToken(user.user_id, user.role, user.email, "7d");
 
         // Clear any stale cookie before setting a fresh one
         res.clearCookie(COOKIE_NAME);

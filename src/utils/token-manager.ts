@@ -2,8 +2,8 @@ import { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { JWT_SECRET, COOKIE_NAME } from "./constants.js";
 
-export const createToken = (id: string, email: string, expiresIn: string) => {
-    const payload = { id, email };
+export const createToken = (user_id: string, role: string, email: string, expiresIn: string) => {
+    const payload = { user_id, role, email };
     const token = jwt.sign(payload, JWT_SECRET, {
         expiresIn: expiresIn as any,
     });
