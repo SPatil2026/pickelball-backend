@@ -21,6 +21,8 @@ enum SlotStatus {
   AVAILABLE
   BOOKED
   BLOCKED
+  IN_CART
+  SELECTED
 }
 
 enum BookingStatus {
@@ -123,6 +125,8 @@ model Bookings {
 
   payments     Payments[]
   reschedules  Reschedules[]
+
+  @@unique([court_id, date, start_time, end_time])
 }
 
 
@@ -144,6 +148,7 @@ model CartItems {
   start_time   DateTime
   end_time     DateTime
   price        Float
+  status       SlotStatus
 
   cart         Cart     @relation(fields: [cart_id], references: [cart_id])
   court        Court    @relation(fields: [court_id], references: [court_id])
