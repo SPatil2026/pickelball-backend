@@ -75,6 +75,7 @@ model Court {
   venue      Venue       @relation(fields: [venue_id], references: [venue_id])
   slots      CourtSlots[]
   bookings   Bookings[]
+  cartItems  CartItems[]
 }
 
 model CourtImages {
@@ -104,8 +105,6 @@ model CourtSlots {
   status      SlotStatus
 
   court       Court      @relation(fields: [court_id], references: [court_id])
-  bookingSlots BookingSlots[]
-  cartItems    CartItems[]
 }
 
 model Bookings {
@@ -122,19 +121,11 @@ model Bookings {
   user         Users         @relation(fields: [user_id], references: [user_id])
   court        Court         @relation(fields: [court_id], references: [court_id])
 
-  slots        BookingSlots[]
   payments     Payments[]
   reschedules  Reschedules[]
 }
 
-model BookingSlots {
-  booking_slot_id String @id @default(uuid())
-  booking_id      String
-  slot_id         String
 
-  booking         Bookings   @relation(fields: [booking_id], references: [booking_id])
-  slot            CourtSlots @relation(fields: [slot_id], references: [slot_id])
-}
 
 model Cart {
   cart_id    String   @id @default(uuid())
@@ -146,13 +137,16 @@ model Cart {
 }
 
 model CartItems {
-  cart_item_id String @id @default(uuid())
+  cart_item_id String   @id @default(uuid())
   cart_id      String
-  slot_id      String
+  court_id     String
+  date         DateTime
+  start_time   DateTime
+  end_time     DateTime
   price        Float
 
-  cart         Cart       @relation(fields: [cart_id], references: [cart_id])
-  slot         CourtSlots @relation(fields: [slot_id], references: [slot_id])
+  cart         Cart     @relation(fields: [cart_id], references: [cart_id])
+  court        Court    @relation(fields: [court_id], references: [court_id])
 }
 
 model Payments {
@@ -167,11 +161,13 @@ model Payments {
 }
 
 model Reschedules {
-  reschedule_id String   @id @default(uuid())
-  booking_id    String
-  old_slot_id   String
-  new_slot_id   String
+  reschedule_id  String   @id @default(uuid())
+  booking_id     String
+  old_date       DateTime
+  old_start_time DateTime
+  new_date       DateTime
+  new_start_time DateTime
   rescheduled_at DateTime @default(now())
 
-  booking       Bookings   @relation(fields: [booking_id], references: [booking_id])
+  booking        Bookings @relation(fields: [booking_id], references: [booking_id])
 }
