@@ -22,7 +22,6 @@ enum SlotStatus {
   BOOKED
   BLOCKED
   IN_CART
-  SELECTED
 }
 
 enum BookingStatus {
@@ -133,7 +132,7 @@ model Bookings {
 
 model Cart {
   cart_id    String   @id @default(uuid())
-  user_id    String
+  user_id    String   @unique
   created_at DateTime @default(now())
 
   user       Users     @relation(fields: [user_id], references: [user_id])
@@ -152,14 +151,14 @@ model CartItems {
 
   cart         Cart     @relation(fields: [cart_id], references: [cart_id])
   court        Court    @relation(fields: [court_id], references: [court_id])
+
+  @@unique([cart_id, court_id, date, start_time])
 }
 
 model Payments {
   payment_id     String   @id @default(uuid())
   booking_id     String
   amount         Float
-  payment_status String
-  payment_method String
   paid_at        DateTime
 
   booking        Bookings @relation(fields: [booking_id], references: [booking_id])

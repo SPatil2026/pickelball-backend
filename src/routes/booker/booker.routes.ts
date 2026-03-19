@@ -1,16 +1,16 @@
 import { Router } from "express";
-import { getAvailableSlots, getVenue, addToCart, getCart, removeFromCart, checkout } from "../../controller/booker/booker.controller.js";
+import { getAvailableSlots, getVenue } from "../../controller/booker/booker.controller.js";
 import { verifyToken } from "../../utils/token-manager.js";
+import bookingsRouter from "../bookings/bookings.routes.js";
+import cartRouter from "../cart/cart.routes.js";
 
 const bookerRouter = Router();
 
 bookerRouter.get("/venues", verifyToken, getVenue);
 bookerRouter.get("/available-slots", verifyToken, getAvailableSlots);
 
-bookerRouter.get("/cart", verifyToken, getCart);
-bookerRouter.post("/cart", verifyToken, addToCart);
-bookerRouter.delete("/cart/:cart_item_id", verifyToken, removeFromCart);
+bookerRouter.use("/cart", verifyToken, cartRouter);
 
-bookerRouter.post("/checkout", verifyToken, checkout);
+bookerRouter.use("/bookings", verifyToken, bookingsRouter);
 
 export default bookerRouter;
