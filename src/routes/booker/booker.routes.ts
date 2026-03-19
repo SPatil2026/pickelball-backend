@@ -7,7 +7,7 @@ import cartRouter from "../cart/cart.routes.js";
 const bookerRouter = Router();
 
 bookerRouter.get("/venues", verifyToken, getVenue);
-bookerRouter.get("/available-slots", verifyToken, getAvailableSlots);
+bookerRouter.get("/venues/:venue_id/slots", verifyToken, getAvailableSlots);
 
 bookerRouter.use("/cart", verifyToken, cartRouter);
 

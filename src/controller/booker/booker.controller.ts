@@ -35,7 +35,8 @@ export const getVenue = async (req: Request, res: Response): Promise<void> => {
 import { generateTimeIntervals } from "../../utils/time.utils.js";
 
 export const getAvailableSlots = async (req: Request, res: Response): Promise<void> => {
-    const { venue_id, date } = req.query;
+    const venue_id = req.params.venue_id as string;
+    const { date } = req.query;
     const userId = res.locals.jwtData.user_id;
 
     if (!venue_id || !date) {

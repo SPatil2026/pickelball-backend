@@ -178,6 +178,30 @@ export const removeFromCart = async (req: Request, res: Response): Promise<void>
     }
 };
 
+export const clearCart = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const userId = res.locals.jwtData.user_id;
+
+        const cart = await prisma.cart.findFirst({
+            where: { user_id: userId }
+        });
+
+        if (!cart) {
+            res.status(200).json({ message: "Cart is already empty." });
+            return;
+        }
+
+        await prisma.cartItems.deleteMany({
+            where: { cart_id: cart.cart_id }
+        });
+
+        res.status(200).json({ message: "Cart cleared successfully." });
+    } catch (error) {
+        console.error("[clearCart]", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
 export const checkout = async (req: Request, res: Response): Promise<void> => {
     try {
         const userId = res.locals.jwtData.user_id;

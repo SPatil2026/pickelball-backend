@@ -95,6 +95,8 @@ model Pricing {
   price_per_hour Float
 
   venue          Venue   @relation(fields: [venue_id], references: [venue_id])
+
+  @@unique([venue_id, day_type])
 }
 
 model CourtSlots {
