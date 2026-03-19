@@ -98,18 +98,35 @@ export const removeCourt = async (req: Request, res: Response) => {
     }
 }
 
-export const getBookings = async (req: Request, res: Response) => {
+export const getBookings = async (req: Request, res: Response): Promise<void> => {
     const userId = res.locals.jwtData.user_id;
+    const { date } = req.query;
 
     try {
-        const bookings = await prisma.bookings.findMany({
-            where: {
-                court: {
-                    venue: {
-                        owner_id: userId
-                    }
+        const whereClause: any = {
+            court: {
+                venue: {
+                    owner_id: userId
                 }
-            },
+            }
+        };
+
+        if (date) {
+            const parsedDate = new Date(date as string);
+            const startOfDay = new Date(parsedDate);
+            startOfDay.setUTCHours(0, 0, 0, 0);
+
+            const endOfDay = new Date(parsedDate);
+            endOfDay.setUTCHours(23, 59, 59, 999);
+
+            whereClause.date = {
+                gte: startOfDay,
+                lte: endOfDay
+            };
+        }
+
+        const bookings = await prisma.bookings.findMany({
+            where: whereClause,
             include: {
                 court: {
                     select: {
@@ -127,11 +144,11 @@ export const getBookings = async (req: Request, res: Response) => {
             }
         });
 
-        return res.status(200).json({ message: "Bookings fetched successfully", bookings });
+        res.status(200).json({ message: "Bookings fetched successfully", bookings });
     }
     catch (err) {
         console.error("[getBookings]", err);
-        return res.status(500).json({ message: "Internal server error" });
+        res.status(500).json({ message: "Internal server error" });
     }
 }
 

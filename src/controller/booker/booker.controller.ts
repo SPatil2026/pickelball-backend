@@ -1,14 +1,38 @@
 import { Request, Response } from "express";
 import prisma from "../../db/prisma.js";
-import { generateTimeIntervals, formatTimeToUTC } from "../../utils/time.utils.js";
+import { generateTimeIntervals, formatTimeToUTC, combineDateAndTime } from "../../utils/time.utils.js";
 
 export const getVenue = async (req: Request, res: Response): Promise<void> => {
     try {
+        const { date, time } = req.query;
+
+        let whereClause: any = {};
+
+        if (date && time) {
+            const bookingDate = new Date(date as string);
+            bookingDate.setUTCHours(0, 0, 0, 0);
+            const reqStartTime = combineDateAndTime(bookingDate, time as string);
+
+            whereClause.courts = {
+                some: {
+                    AND: [
+                        { bookings: { none: { date: bookingDate, start_time: reqStartTime, status: 'CONFIRMED' } } },
+                        { slots: { none: { date: bookingDate, start_time: reqStartTime, status: 'BLOCKED' } } },
+                        { cartItems: { none: { date: bookingDate, start_time: reqStartTime, status: 'IN_CART' } } }
+                    ]
+                }
+            };
+        }
+
         const venues = await prisma.venue.findMany({
+            where: whereClause,
             select: {
+                venue_id: true,
                 name: true,
                 address: true,
                 contact_number: true,
+                opening_time: true,
+                closing_time: true,
                 courts: {
                     select: {
                         court_id: true,
@@ -26,9 +50,71 @@ export const getVenue = async (req: Request, res: Response): Promise<void> => {
                 }
             }
         });
-        res.status(200).json(venues);
+
+        let filteredVenues = venues;
+        
+        if (date && time) {
+            const requestedTimeStr = formatTimeToUTC(combineDateAndTime(new Date(), time as string));
+            filteredVenues = venues.filter(v => {
+                const openStr = formatTimeToUTC(v.opening_time);
+                const closeStr = formatTimeToUTC(v.closing_time);
+                return requestedTimeStr >= openStr && requestedTimeStr < closeStr;
+            });
+        }
+
+        res.status(200).json(filteredVenues);
     } catch (error) {
         console.error("[getVenue]", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+export const getVenueById = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const venue_id = req.params.venue_id as string;
+
+        if (!venue_id) {
+            res.status(400).json({ message: "Venue ID is required" });
+            return;
+        }
+
+        const venue = await prisma.venue.findUnique({
+            where: { venue_id },
+            select: {
+                name: true,
+                address: true,
+                contact_number: true,
+                email: true,
+                opening_time: true,
+                closing_time: true,
+                images: {
+                    select: {
+                        image_url: true,
+                        is_thumbnail: true
+                    }
+                },
+                pricing: {
+                    select: {
+                        day_type: true,
+                        price_per_hour: true
+                    }
+                },
+                _count: {
+                    select: {
+                        courts: true
+                    }
+                }
+            }
+        });
+
+        if (!venue) {
+            res.status(404).json({ message: "Venue not found" });
+            return;
+        }
+
+        res.status(200).json(venue);
+    } catch (error) {
+        console.error("[getVenueById]", error);
         res.status(500).json({ message: "Internal server error" });
     }
 };
