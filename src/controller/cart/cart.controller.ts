@@ -133,6 +133,7 @@ export const addToCart = async (req: Request, res: Response): Promise<void> => {
 
 export const removeFromCart = async (req: Request, res: Response): Promise<void> => {
     try {
+        const userId = res.locals.jwtData.user_id;
         const { cart_item_id } = req.params;
 
         if (!cart_item_id) {
@@ -140,9 +141,20 @@ export const removeFromCart = async (req: Request, res: Response): Promise<void>
             return;
         }
 
-        await prisma.cartItems.delete({
-            where: { cart_item_id: cart_item_id as string }
+        // Defensive: Ensure the cart item belongs to the user's cart
+        const result = await prisma.cartItems.deleteMany({
+            where: {
+                cart_item_id: cart_item_id as string,
+                cart: {
+                    user_id: userId
+                }
+            }
         });
+
+        if (result.count === 0) {
+            res.status(404).json({ message: "Cart item not found or you do not have permission to remove it." });
+            return;
+        }
 
         res.status(200).json({ message: "Removed from cart successfully" });
     } catch (error) {
@@ -228,6 +240,12 @@ export const checkout = async (req: Request, res: Response): Promise<void> => {
 
     } catch (error: any) {
         console.error("[checkout]", error);
+
+        // P2002: Unique constraint failed
+        if (error.code === "P2002") {
+            res.status(409).json({ message: "One or more slots in your cart have just been booked by someone else." });
+            return;
+        }
 
         if (error.message?.includes("SLOT_TAKEN:") || error.message?.includes("SLOT_BLOCKED:")) {
             const userMessage = error.message.includes(':') ? error.message.split(': ')[1] : error.message;

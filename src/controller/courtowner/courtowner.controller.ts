@@ -29,14 +29,23 @@ export const createVenue = async (req: Request, res: Response) => {
 }
 
 export const createCourt = async (req: Request, res: Response) => {
-
+    const userId = res.locals.jwtData.user_id;
     const { venue_id, court_number } = req.body;
 
     if (!venue_id || !court_number) {
-        return res.status(400).json({ message: "All fileds are required!" });
+        return res.status(400).json({ message: "All fields are required!" });
     }
 
     try {
+        // Verify ownership
+        const venue = await prisma.venue.findFirst({
+            where: { venue_id, owner_id: userId }
+        });
+
+        if (!venue) {
+            return res.status(403).json({ message: "You do not have permission to add courts to this venue." });
+        }
+
         const court = await prisma.court.create({
             data: {
                 venue_id,
@@ -53,13 +62,28 @@ export const createCourt = async (req: Request, res: Response) => {
 }
 
 export const removeCourt = async (req: Request, res: Response) => {
+    const userId = res.locals.jwtData.user_id;
     const { court_id } = req.body;
 
     if (!court_id) {
-        return res.status(400).json({ message: "All fileds are required!" });
+        return res.status(400).json({ message: "Court ID is required!" });
     }
 
     try {
+        // Verify ownership via venue
+        const courtExists = await prisma.court.findFirst({
+            where: { court_id },
+            include: { venue: true }
+        });
+
+        if (!courtExists) {
+            return res.status(404).json({ message: "Court not found." });
+        }
+
+        if (courtExists.venue.owner_id !== userId) {
+            return res.status(403).json({ message: "You do not have permission to remove this court." });
+        }
+
         const court = await prisma.court.delete({
             where: {
                 court_id

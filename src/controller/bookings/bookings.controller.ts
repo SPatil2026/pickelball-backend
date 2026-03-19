@@ -137,8 +137,9 @@ export const rescheduleBooking = async (req: Request, res: Response): Promise<vo
             const oldStartTime = lockedBooking.start_time;
 
             // 6e. Update the existing booking with new slot details (in-place, status stays CONFIRMED)
+            // Defensive check: explicitly including user_id in the where clause even if already verified
             await tx.bookings.update({
-                where: { booking_id },
+                where: { booking_id, user_id: userId },
                 data: {
                     date: newDate,
                     start_time: newStartTime,
