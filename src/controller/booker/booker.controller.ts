@@ -209,32 +209,20 @@ export const getAvailableSlots = async (req: Request, res: Response): Promise<vo
             }
         });
 
-        // 5. Merge and determine availability grouped by time then by court
+        // 5. Pre-compute Hash Maps (Sets) for O(1) lookups
+        const bookedSet = new Set(existingBookings.map(b => `${b.court_id}-${formatTimeToUTC(b.start_time)}`));
+        const blockedSet = new Set(blockedSlots.map(s => `${s.court_id}-${formatTimeToUTC(s.start_time)}`));
+        const inCartSet = new Set(incartSlots.map(c => `${c.court_id}-${formatTimeToUTC(c.start_time)}`));
+
+        // 6. Merge and determine availability grouped by time then by court
         const availableSlots = allIntervals.map(interval => {
             const courtsAvailability = venue.courts.map(court => {
-
-                const isBooked = existingBookings.some(booking => {
-                    const bookingStart = formatTimeToUTC(booking.start_time);
-                    const bookingEnd = formatTimeToUTC(booking.end_time);
-                    return booking.court_id === court.court_id && bookingStart === interval.start_time && bookingEnd === interval.end_time;
-                });
-
-                const isBlocked = blockedSlots.some(slot => {
-                    const slotStart = formatTimeToUTC(slot.start_time);
-                    const slotEnd = formatTimeToUTC(slot.end_time);
-                    return slot.court_id === court.court_id && slotStart === interval.start_time && slotEnd === interval.end_time;
-                });
-
-                const isInCart = incartSlots.some(slot => {
-                    const slotStart = formatTimeToUTC(slot.start_time);
-                    const slotEnd = formatTimeToUTC(slot.end_time);
-                    return slot.court_id === court.court_id && slotStart === interval.start_time && slotEnd === interval.end_time;
-                });
+                const key = `${court.court_id}-${interval.start_time}`;
 
                 let status = "AVAILABLE";
-                if (isBlocked) status = "BLOCKED";
-                else if (isBooked) status = "BOOKED";
-                else if (isInCart) status = "IN_CART";
+                if (blockedSet.has(key)) status = "BLOCKED";
+                else if (bookedSet.has(key)) status = "BOOKED";
+                else if (inCartSet.has(key)) status = "IN_CART";
 
                 return {
                     court_id: court.court_id,

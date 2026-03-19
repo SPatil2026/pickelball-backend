@@ -68,7 +68,16 @@ export const rescheduleBooking = async (req: Request, res: Response): Promise<vo
 
         // ── 1. Fetch the original booking ─────────────────────────────────────
         const booking = await prisma.bookings.findFirst({
-            where: { booking_id, user_id: userId }
+            where: { booking_id, user_id: userId },
+            include: {
+                court: {
+                    include: {
+                        venue: {
+                            select: { opening_time: true, closing_time: true }
+                        }
+                    }
+                }
+            }
         });
 
         if (!booking) {
@@ -117,10 +126,21 @@ export const rescheduleBooking = async (req: Request, res: Response): Promise<vo
             return;
         }
 
-        // ── 6. Atomic transaction ─────────────────────────────────────────────
+        // ── 6. Guard: new slot must be within venue operating hours ───────────
+        const reqStartTimeStr = formatTimeToUTC(newStartTime);
+        const reqEndTimeStr = formatTimeToUTC(newEndTime);
+        const openingTimeStr = formatTimeToUTC(booking.court.venue.opening_time);
+        const closingTimeStr = formatTimeToUTC(booking.court.venue.closing_time);
+
+        if (reqStartTimeStr < openingTimeStr || reqEndTimeStr > closingTimeStr) {
+            res.status(400).json({ message: "The requested slot falls outside the venue's operating hours." });
+            return;
+        }
+
+        // ── 7. Atomic transaction ─────────────────────────────────────────────
         await prisma.$transaction(async (tx) => {
 
-            // 6a. Re-verify the original booking is still CONFIRMED inside the transaction
+            // 7a. Re-verify the original booking is still CONFIRMED inside the transaction
             const lockedBooking = await tx.bookings.findFirst({
                 where: { booking_id, user_id: userId, status: "CONFIRMED" }
             });
@@ -129,14 +149,14 @@ export const rescheduleBooking = async (req: Request, res: Response): Promise<vo
                 throw new Error("BOOKING_UNAVAILABLE: The original booking is no longer available for rescheduling.");
             }
 
-            // 6b. Check new slot availability (throws if taken/blocked)
+            // 7b. Check new slot availability (throws if taken/blocked)
             await validateSlotAvailability(tx, lockedBooking.court_id, newDate, newStartTime);
 
-            // 6d. Record old values before mutation
+            // 7c. Record old values before mutation
             const oldDate = lockedBooking.date;
             const oldStartTime = lockedBooking.start_time;
 
-            // 6e. Update the existing booking with new slot details (in-place, status stays CONFIRMED)
+            // 7d. Update the existing booking with new slot details (in-place, status stays CONFIRMED)
             // Defensive check: explicitly including user_id in the where clause even if already verified
             await tx.bookings.update({
                 where: { booking_id, user_id: userId },
@@ -148,7 +168,7 @@ export const rescheduleBooking = async (req: Request, res: Response): Promise<vo
                 }
             });
 
-            // 6f. Write the reschedule history record
+            // 7e. Write the reschedule history record
             await tx.reschedules.create({
                 data: {
                     booking_id,
@@ -160,7 +180,7 @@ export const rescheduleBooking = async (req: Request, res: Response): Promise<vo
             });
         });
 
-        // ── 7. Return the updated booking ─────────────────────────────────────
+        // ── 8. Return the updated booking ─────────────────────────────────────
         const updatedBooking = await prisma.bookings.findUnique({
             where: { booking_id },
             include: {
