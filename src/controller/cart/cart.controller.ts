@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
 import prisma from "../../db/prisma.js";
+import { combineDateAndTime } from "../../utils/time.utils.js";
+import { validateSlotAvailability } from "../../utils/booking.utils.js";
 
 export const getCart = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -42,47 +44,18 @@ export const addToCart = async (req: Request, res: Response): Promise<void> => {
             return;
         }
 
-        // 1. Process dates exactly like the availability checker (UTC)
-        const bookingDate = new Date(date);
+        // 1. Process dates + times exactly like the availability checker (UTC)
+        const bookingDate = new Date(date as string);
         bookingDate.setUTCHours(0, 0, 0, 0);
 
-        // Convert the string times (e.g., "08:00:00") into comparable Date objects
-        const [startHour, startMin, startSec] = start_time.split(':').map(Number);
-        const [endHour, endMin, endSec] = end_time.split(':').map(Number);
+        const reqStartTime = combineDateAndTime(bookingDate, start_time);
+        const reqEndTime = combineDateAndTime(bookingDate, end_time);
 
-        const reqStartTime = new Date(bookingDate);
-        reqStartTime.setUTCHours(startHour, startMin, startSec, 0);
-
-        const reqEndTime = new Date(bookingDate);
-        reqEndTime.setUTCHours(endHour, endMin, endSec, 0);
-
-        // 2. Race Condition Check: Prevent adding to cart if it's already booked
-        const existingBooking = await prisma.bookings.findFirst({
-            where: {
-                court_id: court_id,
-                date: bookingDate,
-                start_time: reqStartTime,
-                status: "CONFIRMED"
-            }
-        });
-
-        if (existingBooking) {
-            res.status(409).json({ message: "This slot has already been booked." });
-            return;
-        }
-
-        // 3. Prevent adding if manually blocked
-        const existingBlocked = await prisma.courtSlots.findFirst({
-            where: {
-                court_id: court_id,
-                date: bookingDate,
-                start_time: reqStartTime,
-                status: "BLOCKED"
-            }
-        });
-
-        if (existingBlocked) {
-            res.status(409).json({ message: "This slot is currently blocked by the venue." });
+        // 2. Race Condition Check: Prevent adding to cart if it's already booked or blocked
+        try {
+            await validateSlotAvailability(prisma, court_id, bookingDate, reqStartTime);
+        } catch (error: any) {
+            res.status(409).json({ message: error.message.includes(':') ? error.message.split(': ')[1] : error.message });
             return;
         }
 
@@ -222,35 +195,8 @@ export const checkout = async (req: Request, res: Response): Promise<void> => {
 
             // 3. Re-Verification Lock
             for (const item of cart.items) {
-                // Check if someone else just booked it
-                const existingBooking = await tx.bookings.findFirst({
-                    where: {
-                        court_id: item.court_id,
-                        date: item.date,
-                        start_time: item.start_time,
-                        status: "CONFIRMED"
-                    }
-                });
-
-                if (existingBooking) {
-                    const timeStr = item.start_time.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
-                    throw new Error(`The slot at ${timeStr} is no longer available.`);
-                }
-
-                // Check if the venue owner just manually blocked it
-                const existingBlocked = await tx.courtSlots.findFirst({
-                    where: {
-                        court_id: item.court_id,
-                        date: item.date,
-                        start_time: item.start_time,
-                        status: "BLOCKED"
-                    }
-                });
-
-                if (existingBlocked) {
-                    const timeStr = item.start_time.toLocaleTimeString('en-US', { hour12: true, hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
-                    throw new Error(`The slot at ${timeStr} was just blocked by the venue.`);
-                }
+                // Throws SLOT_TAKEN or SLOT_BLOCKED if unavailable
+                await validateSlotAvailability(tx, item.court_id, item.date, item.start_time);
             }
 
             // 4. Convert Cart Items to Bookings
@@ -283,9 +229,9 @@ export const checkout = async (req: Request, res: Response): Promise<void> => {
     } catch (error: any) {
         console.error("[checkout]", error);
 
-        // If our custom double-booking error was thrown inside the transaction, send it to the UI
-        if (error.message && error.message.includes("no longer available") || error.message.includes("blocked by the venue")) {
-            res.status(409).json({ message: error.message });
+        if (error.message?.includes("SLOT_TAKEN:") || error.message?.includes("SLOT_BLOCKED:")) {
+            const userMessage = error.message.includes(':') ? error.message.split(': ')[1] : error.message;
+            res.status(409).json({ message: userMessage });
         } else {
             res.status(500).json({ message: "Internal server error during checkout" });
         }

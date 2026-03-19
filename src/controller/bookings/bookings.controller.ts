@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import prisma from "../../db/prisma.js";
-
-const RESCHEDULE_WINDOW_HOURS = 12;
+import { RESCHEDULE_WINDOW_HOURS, combineDateAndTime, formatTimeToUTC } from "../../utils/time.utils.js";
+import { validateSlotAvailability } from "../../utils/booking.utils.js";
 
 export const getMyBookings = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -96,17 +96,11 @@ export const rescheduleBooking = async (req: Request, res: Response): Promise<vo
         }
 
         // ── 3. Parse & normalise the new slot datetimes ───────────────────────
-        const newDate = new Date(new_date);
+        const newDate = new Date(new_date as string);
         newDate.setUTCHours(0, 0, 0, 0);
 
-        const [nsHour, nsMin, nsSec] = new_start_time.split(":").map(Number);
-        const [neHour, neMin, neSec] = new_end_time.split(":").map(Number);
-
-        const newStartTime = new Date(newDate);
-        newStartTime.setUTCHours(nsHour, nsMin, nsSec, 0);
-
-        const newEndTime = new Date(newDate);
-        newEndTime.setUTCHours(neHour, neMin, neSec, 0);
+        const newStartTime = combineDateAndTime(newDate, new_start_time);
+        const newEndTime = combineDateAndTime(newDate, new_end_time);
 
         // ── 4. Guard: new slot must be in the future ──────────────────────────
         if (newStartTime.getTime() <= now.getTime()) {
@@ -135,39 +129,8 @@ export const rescheduleBooking = async (req: Request, res: Response): Promise<vo
                 throw new Error("BOOKING_UNAVAILABLE: The original booking is no longer available for rescheduling.");
             }
 
-            // 6b. Check new slot is not already CONFIRMED
-            const conflictingBooking = await tx.bookings.findFirst({
-                where: {
-                    court_id: lockedBooking.court_id,
-                    date: newDate,
-                    start_time: newStartTime,
-                    status: "CONFIRMED"
-                }
-            });
-
-            if (conflictingBooking) {
-                const timeStr = newStartTime.toLocaleTimeString("en-US", {
-                    hour12: true, hour: "2-digit", minute: "2-digit", timeZone: "UTC"
-                });
-                throw new Error(`SLOT_TAKEN: The new slot at ${timeStr} is already booked.`);
-            }
-
-            // 6c. Check new slot is not BLOCKED by the venue
-            const blockedSlot = await tx.courtSlots.findFirst({
-                where: {
-                    court_id: lockedBooking.court_id,
-                    date: newDate,
-                    start_time: newStartTime,
-                    status: "BLOCKED"
-                }
-            });
-
-            if (blockedSlot) {
-                const timeStr = newStartTime.toLocaleTimeString("en-US", {
-                    hour12: true, hour: "2-digit", minute: "2-digit", timeZone: "UTC"
-                });
-                throw new Error(`SLOT_BLOCKED: The new slot at ${timeStr} is blocked by the venue.`);
-            }
+            // 6b. Check new slot availability (throws if taken/blocked)
+            await validateSlotAvailability(tx, lockedBooking.court_id, newDate, newStartTime);
 
             // 6d. Record old values before mutation
             const oldDate = lockedBooking.date;
@@ -222,11 +185,8 @@ export const rescheduleBooking = async (req: Request, res: Response): Promise<vo
     } catch (error: any) {
         console.error("[rescheduleBooking]", error);
 
-        if (error.message?.startsWith("SLOT_TAKEN:") || error.message?.startsWith("SLOT_BLOCKED:")) {
-            const userMessage = error.message.substring(error.message.indexOf(":") + 2);
-            res.status(409).json({ message: userMessage });
-        } else if (error.message?.startsWith("BOOKING_UNAVAILABLE:")) {
-            const userMessage = error.message.substring(error.message.indexOf(":") + 2);
+        if (error.message?.includes("SLOT_TAKEN:") || error.message?.includes("SLOT_BLOCKED:") || error.message?.includes("BOOKING_UNAVAILABLE:")) {
+            const userMessage = error.message.includes(':') ? error.message.split(': ')[1] : error.message;
             res.status(409).json({ message: userMessage });
         } else {
             res.status(500).json({ message: "Internal server error during rescheduling." });

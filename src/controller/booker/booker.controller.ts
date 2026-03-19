@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import prisma from "../../db/prisma.js";
+import { generateTimeIntervals, formatTimeToUTC } from "../../utils/time.utils.js";
 
 export const getVenue = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -32,7 +33,6 @@ export const getVenue = async (req: Request, res: Response): Promise<void> => {
     }
 };
 
-import { generateTimeIntervals } from "../../utils/time.utils.js";
 
 export const getAvailableSlots = async (req: Request, res: Response): Promise<void> => {
     const venue_id = req.params.venue_id as string;
@@ -124,26 +124,24 @@ export const getAvailableSlots = async (req: Request, res: Response): Promise<vo
         });
 
         // 5. Merge and determine availability grouped by time then by court
-        const timeOptions: Intl.DateTimeFormatOptions = { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'UTC' };
-
         const availableSlots = allIntervals.map(interval => {
             const courtsAvailability = venue.courts.map(court => {
 
                 const isBooked = existingBookings.some(booking => {
-                    const bookingStart = booking.start_time.toLocaleTimeString('en-US', timeOptions);
-                    const bookingEnd = booking.end_time.toLocaleTimeString('en-US', timeOptions);
+                    const bookingStart = formatTimeToUTC(booking.start_time);
+                    const bookingEnd = formatTimeToUTC(booking.end_time);
                     return booking.court_id === court.court_id && bookingStart === interval.start_time && bookingEnd === interval.end_time;
                 });
 
                 const isBlocked = blockedSlots.some(slot => {
-                    const slotStart = slot.start_time.toLocaleTimeString('en-US', timeOptions);
-                    const slotEnd = slot.end_time.toLocaleTimeString('en-US', timeOptions);
+                    const slotStart = formatTimeToUTC(slot.start_time);
+                    const slotEnd = formatTimeToUTC(slot.end_time);
                     return slot.court_id === court.court_id && slotStart === interval.start_time && slotEnd === interval.end_time;
                 });
 
                 const isInCart = incartSlots.some(slot => {
-                    const slotStart = slot.start_time.toLocaleTimeString('en-US', timeOptions);
-                    const slotEnd = slot.end_time.toLocaleTimeString('en-US', timeOptions);
+                    const slotStart = formatTimeToUTC(slot.start_time);
+                    const slotEnd = formatTimeToUTC(slot.end_time);
                     return slot.court_id === court.court_id && slotStart === interval.start_time && slotEnd === interval.end_time;
                 });
 
