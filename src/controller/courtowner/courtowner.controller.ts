@@ -94,6 +94,12 @@ export const uplaodVenueImages = async (req: Request, res: Response) => {
             return res.status(400).json({ message: "Maximum 5 images are allowed" });
         }
 
+        // check if venue already has 5 images
+        const existingImages = await prisma.courtImages.count({ where: { venue_id } });
+        if (existingImages >= 5) {
+            return res.status(400).json({ message: "Maximum 5 images are already uploaded" });
+        }
+
         const uploadResults = await Promise.all(
             files.map((file) => uploadToCloudinary(file))
         );
@@ -143,7 +149,7 @@ export const addMoreVenueImages = async (req: Request, res: Response): Promise<v
             return;
         }
 
-        const venue = await prisma.venue.findUnique({ where: { venue_id }});
+        const venue = await prisma.venue.findUnique({ where: { venue_id } });
         if (!venue || venue.owner_id !== userId) {
             res.status(403).json({ message: "Forbidden" });
             return;
