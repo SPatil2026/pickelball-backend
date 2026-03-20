@@ -28,6 +28,38 @@ export const createVenue = async (req: Request, res: Response) => {
     }
 }
 
+export const deleteVenue = async (req: Request, res: Response) => {
+    const userId = res.locals.jwtData.user_id;
+    const { venue_id } = req.body;
+
+    if (!venue_id) {
+        return res.status(400).json({ message: "Venue ID is required!" });
+    }
+
+    try {
+        // Verify ownership
+        const venue = await prisma.venue.findFirst({
+            where: { venue_id, owner_id: userId }
+        });
+
+        if (!venue) {
+            return res.status(403).json({ message: "You do not have permission to delete this venue." });
+        }
+
+        const deletedVenue = await prisma.venue.delete({
+            where: {
+                venue_id
+            },
+        });
+
+        return res.status(200).json({ message: "Venue deleted successfully", venue: deletedVenue });
+
+    } catch (err) {
+        console.error("[deleteVenue]", err);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+}
+
 export const createCourt = async (req: Request, res: Response) => {
     const userId = res.locals.jwtData.user_id;
     const { venue_id, court_number } = req.body;
