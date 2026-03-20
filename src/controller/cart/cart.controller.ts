@@ -51,6 +51,27 @@ export const addToCart = async (req: Request, res: Response): Promise<void> => {
         const reqStartTime = combineDateAndTime(bookingDate, start_time);
         const reqEndTime = combineDateAndTime(bookingDate, end_time);
 
+        // Start time and end time cannot be the same
+        if (reqStartTime.getTime() === reqEndTime.getTime()) {
+            res.status(400).json({ message: "Start time and end time cannot be the same." });
+            return;
+        }
+
+        // End time must be after start time
+        if (reqEndTime <= reqStartTime) {
+            res.status(400).json({ message: "End time must be after start time." });
+            return;
+        }
+
+        // Minimum duration = 1 hour
+        const diffInMs = reqEndTime.getTime() - reqStartTime.getTime();
+        const oneHour = 60 * 60 * 1000;
+
+        if (diffInMs < oneHour) {
+            res.status(400).json({ message: "Minimum booking duration is 1 hour." });
+            return;
+        }
+
         // 2. Race Condition Check: Prevent adding to cart if it's already booked or blocked
         try {
             await validateSlotAvailability(prisma, court_id, bookingDate, reqStartTime);
@@ -202,6 +223,9 @@ export const checkout = async (req: Request, res: Response): Promise<void> => {
             return;
         }
 
+        // find the total amount
+        const totalAmount = cart.items.reduce((sum, item) => sum + item.price, 0);
+
         // 2. Start Atomic Transaction
         await prisma.$transaction(async (tx) => {
 
@@ -236,7 +260,7 @@ export const checkout = async (req: Request, res: Response): Promise<void> => {
         });
 
         // 6. Transaction completed successfully
-        res.status(200).json({ message: "Checkout successful! Your slots are confirmed." });
+        res.status(200).json({ message: "Checkout successful! Your slots are confirmed.", totalAmount });
 
     } catch (error: any) {
         console.error("[checkout]", error);

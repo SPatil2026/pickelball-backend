@@ -21,6 +21,24 @@ export const createVenue = async (req: Request, res: Response) => {
                 owner_id: userId,
             },
         });
+
+        // add deafult pricing to the venue
+        await prisma.pricing.create({
+            data: {
+                venue_id: venue.venue_id,
+                day_type: "WEEKDAY",
+                price_per_hour: 500,
+            },
+        });
+
+        await prisma.pricing.create({
+            data: {
+                venue_id: venue.venue_id,
+                day_type: "WEEKEND",
+                price_per_hour: 700,
+            },
+        });
+
         return res.status(201).json({ message: "Venue created successfully", venue });
     } catch (error) {
         console.error("[createVenue]", error);
