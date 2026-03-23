@@ -13,6 +13,6 @@ authRouter.post("/register", validate(registerSchema), register);
 authRouter.post("/login", validate(loginSchema), login);
 
 // POST /api/auth/logout  (protected — must be logged in to log out)
-authRouter.post("/logout", verifyToken, logout);
+authRouter.post("/logout", logout);
 
 export default authRouter;

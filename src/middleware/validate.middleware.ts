@@ -11,7 +11,7 @@ export const validate = (schema: ZodTypeAny) => {
             });
             next();
         } catch (error) {
-            res.status(400).json({ message: error.errors });
+            res.status(400).json({ message: error.issues });
         }
     }
 }

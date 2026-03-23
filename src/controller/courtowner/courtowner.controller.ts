@@ -10,36 +10,38 @@ export const createVenue = async (req: Request, res: Response) => {
     }
 
     try {
-        const venue = await prisma.venue.create({
-            data: {
-                name,
-                address,
-                contact_number,
-                email,
-                opening_time,
-                closing_time,
-                owner_id: userId,
-            },
-        });
 
-        // add deafult pricing to the venue
-        await prisma.pricing.create({
-            data: {
-                venue_id: venue.venue_id,
-                day_type: "WEEKDAY",
-                price_per_hour: 500,
-            },
-        });
+        const result = await prisma.$transaction(async (tx) => {
+            const venue = await tx.venue.create({
+                data: {
+                    name,
+                    address,
+                    contact_number,
+                    email,
+                    opening_time,
+                    closing_time,
+                    owner_id: userId,
+                },
+            });
 
-        await prisma.pricing.create({
-            data: {
-                venue_id: venue.venue_id,
-                day_type: "WEEKEND",
-                price_per_hour: 700,
-            },
-        });
+            // add deafult pricing to the venue
+            await tx.pricing.create({
+                data: {
+                    venue_id: venue.venue_id,
+                    day_type: "WEEKDAY",
+                    price_per_hour: 500,
+                },
+            });
 
-        return res.status(201).json({ message: "Venue created successfully", venue });
+            await tx.pricing.create({
+                data: {
+                    venue_id: venue.venue_id,
+                    day_type: "WEEKEND",
+                    price_per_hour: 700,
+                },
+            });
+        })
+        return res.status(201).json({ message: "Venue created successfully", result });
     } catch (error) {
         console.error("[createVenue]", error);
         return res.status(500).json({ message: "Internal server error" });
