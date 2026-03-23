@@ -6,13 +6,6 @@ export const getVenue = async (req: Request, res: Response): Promise<void> => {
     try {
         const { date, time } = req.query;
 
-        const today = new Date().setUTCHours(0, 0, 0, 0);
-
-        if (date && new Date(date as string) < new Date(today)) {
-            res.status(400).json({ message: "Date cannot be in the past" });
-            return;
-        }
-
         let whereClause: any = {};
 
         if (date && time) {
@@ -80,11 +73,6 @@ export const getVenueById = async (req: Request, res: Response): Promise<void> =
     try {
         const venue_id = req.params.venue_id as string;
 
-        if (!venue_id) {
-            res.status(400).json({ message: "Venue ID is required" });
-            return;
-        }
-
         const venue = await prisma.venue.findUnique({
             where: { venue_id },
             select: {
@@ -131,18 +119,6 @@ export const getAvailableSlots = async (req: Request, res: Response): Promise<vo
     const venue_id = req.params.venue_id as string;
     const { date } = req.query;
     const userId = res.locals.jwtData.user_id;
-
-    if (!venue_id || !date) {
-        res.status(400).json({ message: "venue_id and date are required" });
-        return;
-    }
-
-    const today = new Date().setUTCHours(0, 0, 0, 0);
-
-    if (new Date(date as string) < new Date(today)) {
-        res.status(400).json({ message: "Date cannot be in the past" });
-        return;
-    }
 
     try {
         const parsedDate = new Date(date as string);

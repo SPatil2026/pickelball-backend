@@ -39,11 +39,6 @@ export const addToCart = async (req: Request, res: Response): Promise<void> => {
         const userId = res.locals.jwtData.user_id;
         const { court_id, date, start_time, end_time } = req.body;
 
-        if (!court_id || !date || !start_time || !end_time) {
-            res.status(400).json({ message: "All fields are required" });
-            return;
-        }
-
         // 1. Process dates + times exactly like the availability checker (UTC)
         const bookingDate = new Date(date as string);
         bookingDate.setUTCHours(0, 0, 0, 0);
@@ -157,8 +152,8 @@ export const removeFromCart = async (req: Request, res: Response): Promise<void>
         const userId = res.locals.jwtData.user_id;
         const { cart_item_id } = req.params;
 
-        if (!cart_item_id) {
-            res.status(400).json({ message: "Cart item ID is required" });
+        if (!cart_item_id || cart_item_id === "undefined") {
+            res.status(400).json({ message: "Cart item ID is required." });
             return;
         }
 
@@ -188,18 +183,18 @@ export const clearCart = async (req: Request, res: Response): Promise<void> => {
     try {
         const userId = res.locals.jwtData.user_id;
 
-        const cart = await prisma.cart.findFirst({
-            where: { user_id: userId }
+        const result = await prisma.cartItems.deleteMany({
+            where: {
+                cart: {
+                    user_id: userId
+                }
+            }
         });
 
-        if (!cart) {
+        if (result.count === 0) {
             res.status(200).json({ message: "Cart is already empty." });
             return;
         }
-
-        await prisma.cartItems.deleteMany({
-            where: { cart_id: cart.cart_id }
-        });
 
         res.status(200).json({ message: "Cart cleared successfully." });
     } catch (error) {

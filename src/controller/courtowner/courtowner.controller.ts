@@ -5,10 +5,6 @@ export const createVenue = async (req: Request, res: Response) => {
     const userId = res.locals.jwtData.user_id;
     const { name, address, contact_number, email, opening_time, closing_time } = req.body;
 
-    if (!name || !address || !contact_number || !email || !opening_time || !closing_time) {
-        return res.status(400).json({ message: "All fields are required" });
-    }
-
     try {
 
         const result = await prisma.$transaction(async (tx) => {
@@ -18,8 +14,8 @@ export const createVenue = async (req: Request, res: Response) => {
                     address,
                     contact_number,
                     email,
-                    opening_time,
-                    closing_time,
+                    opening_time: new Date(opening_time),
+                    closing_time: new Date(closing_time),
                     owner_id: userId,
                 },
             });
@@ -50,11 +46,7 @@ export const createVenue = async (req: Request, res: Response) => {
 
 export const deleteVenue = async (req: Request, res: Response) => {
     const userId = res.locals.jwtData.user_id;
-    const { venue_id } = req.body;
-
-    if (!venue_id) {
-        return res.status(400).json({ message: "Venue ID is required!" });
-    }
+    const venue_id = req.params.venue_id as string;
 
     try {
         // Verify ownership
@@ -84,10 +76,6 @@ export const createCourt = async (req: Request, res: Response) => {
     const userId = res.locals.jwtData.user_id;
     const { venue_id, court_number } = req.body;
 
-    if (!venue_id || !court_number) {
-        return res.status(400).json({ message: "All fields are required!" });
-    }
-
     try {
         // Verify ownership
         const venue = await prisma.venue.findFirst({
@@ -116,10 +104,6 @@ export const createCourt = async (req: Request, res: Response) => {
 export const removeCourt = async (req: Request, res: Response) => {
     const userId = res.locals.jwtData.user_id;
     const { court_id } = req.body;
-
-    if (!court_id) {
-        return res.status(400).json({ message: "Court ID is required!" });
-    }
 
     try {
         // Verify ownership via venue
@@ -209,12 +193,6 @@ export const updateVenue = async (req: Request, res: Response): Promise<void> =>
     const venue_id = req.params.venue_id as string;
     const { name, address, contact_number, email, opening_time, closing_time } = req.body;
 
-    // At least one field must be provided
-    if (!name && !address && !contact_number && !email && !opening_time && !closing_time) {
-        res.status(400).json({ message: "At least one field is required to update." });
-        return;
-    }
-
     try {
         // Verify the venue belongs to this owner
         const venue = await prisma.venue.findFirst({
@@ -249,32 +227,7 @@ export const setPricing = async (req: Request, res: Response): Promise<void> => 
     const userId = res.locals.jwtData.user_id;
     const venue_id = req.params.venue_id as string;
 
-    // Expecting: [{ day_type: "WEEKDAY" | "WEEKEND", price_per_hour: number }]
-    const { pricing } = req.body as {
-        pricing: { day_type: "WEEKDAY" | "WEEKEND"; price_per_hour: number }[];
-    };
-
-    if (!Array.isArray(pricing) || pricing.length === 0) {
-        res.status(400).json({ message: "pricing must be a non-empty array of { day_type, price_per_hour }." });
-        return;
-    }
-
-    for (const entry of pricing) {
-        if (!entry.day_type || !entry.price_per_hour) {
-            res.status(400).json({ message: "Each pricing entry must include day_type and price_per_hour." });
-            return;
-        }
-
-        if (entry.day_type !== "WEEKDAY" && entry.day_type !== "WEEKEND") {
-            res.status(400).json({ message: "day_type must be WEEKDAY or WEEKEND." });
-            return;
-        }
-
-        if (typeof entry.price_per_hour !== "number" || entry.price_per_hour <= 0) {
-            res.status(400).json({ message: "price_per_hour must be a positive number." });
-            return;
-        }
-    }
+    const { pricing } = req.body;
 
     try {
         // Verify the venue belongs to this owner

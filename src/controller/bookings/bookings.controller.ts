@@ -61,11 +61,6 @@ export const rescheduleBooking = async (req: Request, res: Response): Promise<vo
         const booking_id = req.params.booking_id as string;
         const { new_date, new_start_time, new_end_time } = req.body;
 
-        if (!booking_id || !new_date || !new_start_time || !new_end_time) {
-            res.status(400).json({ message: "booking_id, new_date, new_start_time, and new_end_time are required." });
-            return;
-        }
-
         // ── 1. Fetch the original booking ─────────────────────────────────────
         const booking = await prisma.bookings.findFirst({
             where: { booking_id, user_id: userId },
