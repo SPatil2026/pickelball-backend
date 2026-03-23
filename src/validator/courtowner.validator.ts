@@ -63,3 +63,10 @@ export const getBookingsSchema = z.object({
         date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)").optional()
     })
 });
+
+export const getOwnerVenueByIdSchema = z.object({
+    params: z.object({
+        venue_id: z.string().uuid("Invalid venue ID format")
+    })
+});
+

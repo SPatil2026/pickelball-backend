@@ -44,6 +44,61 @@ export const createVenue = async (req: Request, res: Response) => {
     }
 }
 
+export const getOnwerVenue = async (req: Request, res: Response) => {
+    const userId = res.locals.jwtData.user_id;
+
+    try {
+        const venues = await prisma.venue.findMany({
+            where: { owner_id: userId },
+            include: {
+                courts: true,
+                pricing: true
+            }
+        });
+        return res.status(200).json({ message: "Venues fetched successfully", venues });
+    } catch (error) {
+        console.error("[getOnwerVenue]", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+}
+
+export const getOwnerVenueById = async (req: Request, res: Response) => {
+    const userId = res.locals.jwtData.user_id;
+    const venue_id = req.params.venue_id as string;
+
+    try {
+        const venue = await prisma.venue.findFirst({
+            where: { venue_id, owner_id: userId },
+            select: {
+                venue_id: true,
+                name: true,
+                address: true,
+                contact_number: true,
+                email: true,
+                opening_time: true,
+                closing_time: true,
+                _count: {
+                    select: {
+                        courts: true,
+                        pricing: true
+                    }
+                },
+                images: {
+                    select: {
+                        image_url: true,
+                        is_thumbnail: true
+                    }
+                }
+
+            }
+        });
+        return res.status(200).json({ message: "Venue fetched successfully", venue });
+    } catch (error) {
+        console.error("[getOwnerVenueById]", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+}
+
 export const deleteVenue = async (req: Request, res: Response) => {
     const userId = res.locals.jwtData.user_id;
     const venue_id = req.params.venue_id as string;
@@ -84,6 +139,14 @@ export const createCourt = async (req: Request, res: Response) => {
 
         if (!venue) {
             return res.status(403).json({ message: "You do not have permission to add courts to this venue." });
+        }
+
+        const existingCourt = await prisma.court.findFirst({
+            where: { venue_id, court_number }
+        });
+
+        if (existingCourt) {
+            return res.status(400).json({ message: "Court already exists." });
         }
 
         const court = await prisma.court.create({
