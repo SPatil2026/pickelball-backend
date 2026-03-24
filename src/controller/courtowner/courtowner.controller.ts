@@ -52,7 +52,15 @@ export const getOnwerVenue = async (req: Request, res: Response) => {
             where: { owner_id: userId },
             include: {
                 courts: true,
-                pricing: true
+                pricing: true,
+                images: {
+                    where: {
+                        is_thumbnail: true
+                    },
+                    select: {
+                        image_url: true
+                    }
+                }
             }
         });
         return res.status(200).json({ message: "Venues fetched successfully", venues });

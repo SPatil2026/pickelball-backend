@@ -2,6 +2,7 @@ import { Router } from "express";
 import { createCourt, createVenue, getBookings, removeCourt, updateVenue, setPricing, deleteVenue, getOnwerVenue, getOwnerVenueById } from "../../controller/courtowner/courtowner.controller.js";
 import { validate } from "../../middleware/validate.middleware.js";
 import { createCourtSchema, createVenueSchema, deleteVenueSchema, getBookingsSchema, removeCourtSchema, setPricingSchema, updateVenueSchema, getOwnerVenueByIdSchema } from "../../validator/courtowner.validator.js";
+import uploadRouter from "../upload/upload.routes.js";
 
 const courtOwnerRouter = Router();
 
@@ -15,5 +16,7 @@ courtOwnerRouter.post("/create-court", validate(createCourtSchema), createCourt)
 courtOwnerRouter.delete("/remove-court", validate(removeCourtSchema), removeCourt);
 
 courtOwnerRouter.get("/bookings", validate(getBookingsSchema), getBookings);
+
+courtOwnerRouter.use("/upload", uploadRouter);
 
 export default courtOwnerRouter;
