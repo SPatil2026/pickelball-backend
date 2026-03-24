@@ -43,9 +43,11 @@ export const getVenue = async (req: Request, res: Response): Promise<void> => {
                     }
                 },
                 images: {
-                    select: {
-                        image_url: true,
+                    where: {
                         is_thumbnail: true
+                    },
+                    select: {
+                        image_url: true
                     }
                 }
             }

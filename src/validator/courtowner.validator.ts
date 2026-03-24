@@ -4,8 +4,12 @@ export const createVenueSchema = z.object({
     body: z.object({
         name: z.string().min(2, "Name must be at least 2 characters"),
         address: z.string().min(5, "Address must be at least 5 characters"),
-        contact_number: z.string().min(10, "Contact number is required"),
-        email: z.string().email("Invalid email address"),
+        contact_number: z.string()
+            .length(10, "Contact number must be 10 digits")
+            .regex(/^[0-9]+$/, "Contact number must contain only digits"),
+        email: z.string()
+            .email("Invalid email address")
+            .regex(/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/, "Invalid email address"),
         opening_time: z.string().datetime("Opening time must be a valid ISO date string"),
         closing_time: z.string().datetime("Closing time must be a valid ISO date string")
     })
@@ -18,8 +22,14 @@ export const updateVenueSchema = z.object({
     body: z.object({
         name: z.string().min(2).optional(),
         address: z.string().min(5).optional(),
-        contact_number: z.string().min(10).optional(),
-        email: z.string().email().optional(),
+        contact_number: z.string()
+            .length(10, "Contact number must be 10 digits")
+            .regex(/^[0-9]+$/, "Contact number must contain only digits")
+            .optional(),
+        email: z.string()
+            .email("Invalid email address")
+            .regex(/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/, "Invalid email address")
+            .optional(),
         opening_time: z.string().datetime().optional(),
         closing_time: z.string().datetime().optional()
     }).refine(data => Object.keys(data).length > 0, {
@@ -48,7 +58,7 @@ export const setPricingSchema = z.object({
 export const createCourtSchema = z.object({
     body: z.object({
         venue_id: z.string().uuid("Invalid venue ID format"),
-        court_number: z.number().int().positive("Court number must be a positive integer")
+        court_number: z.number().int().positive("Court number must be a positive integer").max(3, "Court number must be less than or equal to 3")
     })
 });
 

@@ -1,11 +1,12 @@
 import { Router } from "express";
-import { createCourt, createVenue, getBookings, removeCourt, updateVenue, setPricing, deleteVenue, getOnwerVenue, getOwnerVenueById } from "../../controller/courtowner/courtowner.controller.js";
+import { createCourt, createVenue, getBookings, removeCourt, updateVenue, setPricing, deleteVenue, getOnwerVenue, getOwnerVenueById, getOwnerDashboard } from "../../controller/courtowner/courtowner.controller.js";
 import { validate } from "../../middleware/validate.middleware.js";
 import { createCourtSchema, createVenueSchema, deleteVenueSchema, getBookingsSchema, removeCourtSchema, setPricingSchema, updateVenueSchema, getOwnerVenueByIdSchema } from "../../validator/courtowner.validator.js";
 import uploadRouter from "../upload/upload.routes.js";
 
 const courtOwnerRouter = Router();
 
+courtOwnerRouter.get("/dashboard", getOwnerDashboard);
 courtOwnerRouter.get("/venues", getOnwerVenue);
 courtOwnerRouter.get("/venue/:venue_id", validate(getOwnerVenueByIdSchema), getOwnerVenueById);
 courtOwnerRouter.post("/create-venue", validate(createVenueSchema), createVenue);

@@ -121,11 +121,28 @@ export const deleteVenue = async (req: Request, res: Response) => {
             return res.status(403).json({ message: "You do not have permission to delete this venue." });
         }
 
-        const deletedVenue = await prisma.venue.delete({
-            where: {
-                venue_id
-            },
+        const deletedVenue = await prisma.$transaction(async (tx) => {
+            // Delete child records first
+            await tx.courtImages.deleteMany({
+                where: { venue_id }
+            });
+
+            await tx.pricing.deleteMany({
+                where: { venue_id }
+            });
+
+            await tx.court.deleteMany({
+                where: { venue_id }
+            });
+
+            // Then delete venue
+            const venue = await tx.venue.delete({
+                where: { venue_id }
+            });
+
+            return venue;
         });
+
 
         return res.status(200).json({ message: "Venue deleted successfully", venue: deletedVenue });
 
@@ -334,6 +351,58 @@ export const setPricing = async (req: Request, res: Response): Promise<void> => 
         res.status(200).json({ message: "Pricing set successfully.", pricing: results });
     } catch (error) {
         console.error("[setPricing]", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+}
+
+export const getOwnerDashboard = async (req: Request, res: Response) => {
+    const userId = res.locals.jwtData.user_id;
+
+    if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+        const totalVenues = await prisma.venue.count({
+            where: {
+                owner_id: userId
+            }
+        });
+
+        const totalCourts = await prisma.court.count({
+            where: {
+                venue: {
+                    owner_id: userId
+                }
+            }
+        });
+
+        const totalBookings = await prisma.bookings.count({
+            where: {
+                court: {
+                    venue: {
+                        owner_id: userId
+                    }
+                }
+            }
+        });
+
+        const totalRevenue = await prisma.bookings.aggregate({
+            where: {
+                court: {
+                    venue: {
+                        owner_id: userId
+                    }
+                }
+            },
+            _sum: {
+                total_amount: true
+            }
+        });
+
+        res.status(200).json({ message: "Owner dashboard fetched successfully", totalVenues, totalCourts, totalBookings, totalRevenue });
+    } catch (error) {
+        console.error("[getOwnerDashboard]", error);
         res.status(500).json({ message: "Internal server error" });
     }
 }
