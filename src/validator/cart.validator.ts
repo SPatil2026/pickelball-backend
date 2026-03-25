@@ -22,8 +22,8 @@ export const checkoutSchema = z.object({
     body: z.object({}).strict()
 });
 
-export const clearCartSchema = z.object({
-    body: z.object({}).strict()
-});
+// export const clearCartSchema = z.object({
+//     body: z.object({}).strict()
+// });
 
 

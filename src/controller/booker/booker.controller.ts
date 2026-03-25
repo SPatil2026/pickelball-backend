@@ -4,9 +4,23 @@ import { generateTimeIntervals, formatTimeToUTC, combineDateAndTime } from "../.
 
 export const getVenue = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { date, time } = req.query;
+        const { date, time, address } = req.query;
 
         let whereClause: any = {};
+
+        if (address) {
+            whereClause.address = {
+                contains: address as string,
+                mode: 'insensitive'
+            };
+        }
+
+        // if (name) {
+        //     whereClause.name = {
+        //         contains: name as string,
+        //         mode: 'insensitive'
+        //     };
+        // }
 
         if (date && time) {
             const bookingDate = new Date(date as string);
