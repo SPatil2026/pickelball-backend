@@ -127,7 +127,7 @@ model Bookings {
   payments     Payments[]
   reschedules  Reschedules[]
 
-  @@unique([court_id, date, start_time, end_time])
+  @@unique([court_id, date, start_time, end_time, created_at])
 }
 
 

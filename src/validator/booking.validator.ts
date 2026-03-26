@@ -17,3 +17,10 @@ export const rescheduleBookingSchema = z.object({
 export const getMyBookingsSchema = z.object({
     body: z.object({}).strict()
 });
+
+export const cancelBookingSchema = z.object({
+    params: z.object({
+        booking_id: z.string().uuid("Invalid booking ID format")
+    })
+});
+

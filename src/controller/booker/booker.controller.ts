@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import prisma from "../../db/prisma.js";
 import { generateTimeIntervals, formatTimeToUTC, combineDateAndTime } from "../../utils/time.utils.js";
+import { BookingStatus, SlotStatus } from "@prisma/client";
 
 export const getVenue = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -30,9 +31,9 @@ export const getVenue = async (req: Request, res: Response): Promise<void> => {
             whereClause.courts = {
                 some: {
                     AND: [
-                        { bookings: { none: { date: bookingDate, start_time: reqStartTime, status: 'CONFIRMED' } } },
-                        { slots: { none: { date: bookingDate, start_time: reqStartTime, status: 'BLOCKED' } } },
-                        { cartItems: { none: { date: bookingDate, start_time: reqStartTime, status: 'IN_CART' } } }
+                        { bookings: { none: { date: bookingDate, start_time: reqStartTime, status: BookingStatus.CONFIRMED } } },
+                        { slots: { none: { date: bookingDate, start_time: reqStartTime, status: SlotStatus.BLOCKED } } },
+                        { cartItems: { none: { date: bookingDate, start_time: reqStartTime, status: SlotStatus.IN_CART } } }
                     ]
                 }
             };
@@ -184,7 +185,7 @@ export const getAvailableSlots = async (req: Request, res: Response): Promise<vo
                     gte: startOfDay,
                     lte: endOfDay
                 },
-                status: "CONFIRMED"
+                status: BookingStatus.CONFIRMED
             }
         });
 
@@ -196,7 +197,7 @@ export const getAvailableSlots = async (req: Request, res: Response): Promise<vo
                     gte: startOfDay,
                     lte: endOfDay
                 },
-                status: "BLOCKED"
+                status: SlotStatus.BLOCKED
             }
         });
 
@@ -211,7 +212,7 @@ export const getAvailableSlots = async (req: Request, res: Response): Promise<vo
                     gte: startOfDay,
                     lte: endOfDay
                 },
-                status: "IN_CART"
+                status: SlotStatus.IN_CART
             }
         });
 

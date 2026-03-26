@@ -1,7 +1,8 @@
 import { Request, Response } from "express";
 import prisma from "../../db/prisma.js";
-import { RESCHEDULE_WINDOW_HOURS, combineDateAndTime, formatTimeToUTC } from "../../utils/time.utils.js";
+import { CANCEL_WINDOW_HOURS, RESCHEDULE_WINDOW_HOURS, combineDateAndTime, formatTimeToUTC } from "../../utils/time.utils.js";
 import { validateSlotAvailability } from "../../utils/booking.utils.js";
+import { BookingStatus } from "@prisma/client";
 
 export const getMyBookings = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -30,20 +31,28 @@ export const getMyBookings = async (req: Request, res: Response): Promise<void> 
         });
 
         const now = new Date();
-        const thresholdMs = RESCHEDULE_WINDOW_HOURS * 60 * 60 * 1000;
+        const reschedule_thresholdMs = RESCHEDULE_WINDOW_HOURS * 60 * 60 * 1000;
+        const cancel_thresholdMs = CANCEL_WINDOW_HOURS * 60 * 60 * 1000;
 
         const enrichedBookings = bookings.map((booking) => {
             const msUntilStart = booking.start_time.getTime() - now.getTime();
-            const isEligible =
-                booking.status === "CONFIRMED" && msUntilStart > thresholdMs;
+            const isRescheduleEligible =
+                booking.status === BookingStatus.CONFIRMED && msUntilStart > reschedule_thresholdMs;
+            const isCancelEligible = booking.status === BookingStatus.CONFIRMED && msUntilStart > cancel_thresholdMs;
 
             return {
                 ...booking,
-                is_reschedule_eligible: isEligible,
-                reschedule_ineligible_reason: !isEligible
-                    ? booking.status !== "CONFIRMED"
+                is_reschedule_eligible: isRescheduleEligible,
+                is_cancel_eligible: isCancelEligible,
+                reschedule_ineligible_reason: !isRescheduleEligible
+                    ? booking.status !== BookingStatus.CONFIRMED
                         ? `Booking is ${booking.status.toLowerCase()} — only confirmed bookings can be rescheduled.`
                         : `Rescheduling is not allowed within ${RESCHEDULE_WINDOW_HOURS} hours of the booking start time.`
+                    : null,
+                cancel_ineligible_reason: !isCancelEligible
+                    ? booking.status !== BookingStatus.CONFIRMED
+                        ? `Booking is ${booking.status.toLowerCase()} — only confirmed bookings can be cancelled.`
+                        : `Cancellation is not allowed within ${CANCEL_WINDOW_HOURS} hours of the booking start time.`
                     : null
             };
         });
@@ -80,7 +89,7 @@ export const rescheduleBooking = async (req: Request, res: Response): Promise<vo
             return;
         }
 
-        if (booking.status !== "CONFIRMED") {
+        if (booking.status !== BookingStatus.CONFIRMED) {
             res.status(409).json({
                 message: `Only confirmed bookings can be rescheduled. This booking is ${booking.status.toLowerCase()}.`
             });
@@ -137,7 +146,7 @@ export const rescheduleBooking = async (req: Request, res: Response): Promise<vo
 
             // 7a. Re-verify the original booking is still CONFIRMED inside the transaction
             const lockedBooking = await tx.bookings.findFirst({
-                where: { booking_id, user_id: userId, status: "CONFIRMED" }
+                where: { booking_id, user_id: userId, status: BookingStatus.CONFIRMED }
             });
 
             if (!lockedBooking) {
@@ -159,7 +168,7 @@ export const rescheduleBooking = async (req: Request, res: Response): Promise<vo
                     date: newDate,
                     start_time: newStartTime,
                     end_time: newEndTime,
-                    status: "CONFIRMED"
+                    status: BookingStatus.CONFIRMED
                 }
             });
 
@@ -209,3 +218,47 @@ export const rescheduleBooking = async (req: Request, res: Response): Promise<vo
         }
     }
 };
+
+export const cancelBooking = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const userId = res.locals.jwtData.user_id;
+        const booking_id = req.params.booking_id as string;
+
+        const booking = await prisma.bookings.findFirst({
+            where: { booking_id, user_id: userId }
+        });
+
+        if (!booking) {
+            res.status(404).json({ message: "Booking not found." });
+            return;
+        }
+
+        if (booking.status !== BookingStatus.CONFIRMED) {
+            res.status(409).json({
+                message: `Only confirmed bookings can be cancelled. This booking is ${booking.status.toLowerCase()}.`
+            });
+            return;
+        }
+
+        const now = new Date();
+        const msUntilStart = booking.start_time.getTime() - now.getTime();
+        const thresholdMs = CANCEL_WINDOW_HOURS * 60 * 60 * 1000;
+
+        if (msUntilStart <= thresholdMs) {
+            res.status(409).json({
+                message: `Cancellation is not allowed within ${CANCEL_WINDOW_HOURS} hours of the booking start time.`
+            });
+            return;
+        }
+
+        await prisma.bookings.update({
+            where: { booking_id },
+            data: { status: BookingStatus.CANCELLED }
+        });
+
+        res.status(200).json({ message: "Booking cancelled successfully.", booking });
+    } catch (error) {
+        console.error("[cancelBooking]", error);
+        res.status(500).json({ message: "Internal server error during cancellation." });
+    }
+}

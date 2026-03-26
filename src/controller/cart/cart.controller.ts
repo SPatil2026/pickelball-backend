@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import prisma from "../../db/prisma.js";
 import { combineDateAndTime } from "../../utils/time.utils.js";
 import { validateSlotAvailability } from "../../utils/booking.utils.js";
+import { DayType, SlotStatus } from "@prisma/client";
 
 export const getCart = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -18,16 +19,23 @@ export const getCart = async (req: Request, res: Response): Promise<void> => {
                             }
                         }
                     }
+                },
+                _count: {
+                    select: {
+                        items: true
+                    }
                 }
             }
         });
 
         if (!cart) {
-            res.status(200).json({ items: [] });
+            res.status(200).json({ items: [], total_amount: 0 });
             return;
         }
 
-        res.status(200).json(cart);
+        const total_amount = cart.items.reduce((acc, item) => acc + item.price, 0);
+
+        res.status(200).json({ cart, total_amount });
     } catch (error) {
         console.error("[getCart]", error);
         res.status(500).json({ message: "Internal server error" });
@@ -113,7 +121,7 @@ export const addToCart = async (req: Request, res: Response): Promise<void> => {
         // get if the day of booking is weekday or weekend
         const dayOfWeek = bookingDate.getDay();
         const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
-        const dayType = isWeekday ? "WEEKDAY" : "WEEKEND";
+        const dayType = isWeekday ? DayType.WEEKDAY : DayType.WEEKEND;
 
         // get the pricing from the pricing table for that court
         const pricing = await prisma.pricing.findFirst({
@@ -135,7 +143,7 @@ export const addToCart = async (req: Request, res: Response): Promise<void> => {
                 start_time: reqStartTime,
                 end_time: reqEndTime,
                 price: pricing?.price_per_hour || 0,
-                status: "IN_CART"
+                status: SlotStatus.IN_CART
             }
         });
 
