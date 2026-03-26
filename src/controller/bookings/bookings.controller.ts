@@ -96,32 +96,22 @@ export const rescheduleBooking = async (req: Request, res: Response): Promise<vo
             return;
         }
 
-        // ── 2. Enforce the 12-hour rule ───────────────────────────────────────
         const now = new Date();
-        const msUntilStart = booking.start_time.getTime() - now.getTime();
-        const thresholdMs = RESCHEDULE_WINDOW_HOURS * 60 * 60 * 1000;
 
-        if (msUntilStart <= thresholdMs) {
-            res.status(409).json({
-                message: `Rescheduling is not allowed within ${RESCHEDULE_WINDOW_HOURS} hours of the booking start time.`
-            });
-            return;
-        }
-
-        // ── 3. Parse & normalise the new slot datetimes ───────────────────────
+        // ── 2. Parse & normalise the new slot datetimes ───────────────────────
         const newDate = new Date(new_date as string);
         newDate.setUTCHours(0, 0, 0, 0);
 
         const newStartTime = combineDateAndTime(newDate, new_start_time);
         const newEndTime = combineDateAndTime(newDate, new_end_time);
 
-        // ── 4. Guard: new slot must be in the future ──────────────────────────
+        // ── 3. Guard: new slot must be in the future ──────────────────────────
         if (newStartTime.getTime() <= now.getTime()) {
             res.status(400).json({ message: "The new slot must be in the future." });
             return;
         }
 
-        // ── 5. Guard: new slot must differ from the current slot ──────────────
+        // ── 4. Guard: new slot must differ from the current slot ──────────────
         if (
             newStartTime.getTime() === booking.start_time.getTime() &&
             newDate.getTime() === booking.date.getTime()
@@ -130,7 +120,7 @@ export const rescheduleBooking = async (req: Request, res: Response): Promise<vo
             return;
         }
 
-        // ── 6. Guard: new slot must be within venue operating hours ───────────
+        // ── 5. Guard: new slot must be within venue operating hours ───────────
         const reqStartTimeStr = formatTimeToUTC(newStartTime);
         const reqEndTimeStr = formatTimeToUTC(newEndTime);
         const openingTimeStr = formatTimeToUTC(booking.court.venue.opening_time);
@@ -141,10 +131,12 @@ export const rescheduleBooking = async (req: Request, res: Response): Promise<vo
             return;
         }
 
-        // ── 7. Atomic transaction ─────────────────────────────────────────────
+        const thresholdMs = RESCHEDULE_WINDOW_HOURS * 60 * 60 * 1000;
+
+        // ── 6. Atomic transaction ─────────────────────────────────────────────
         await prisma.$transaction(async (tx) => {
 
-            // 7a. Re-verify the original booking is still CONFIRMED inside the transaction
+            // 6a. Re-verify the original booking is still CONFIRMED inside the transaction
             const lockedBooking = await tx.bookings.findFirst({
                 where: { booking_id, user_id: userId, status: BookingStatus.CONFIRMED }
             });
@@ -153,14 +145,22 @@ export const rescheduleBooking = async (req: Request, res: Response): Promise<vo
                 throw new Error("BOOKING_UNAVAILABLE: The original booking is no longer available for rescheduling.");
             }
 
-            // 7b. Check new slot availability (throws if taken/blocked)
+            const msUntilStart = booking.start_time.getTime() - now.getTime();
+            if (msUntilStart <= thresholdMs) {
+                res.status(409).json({
+                    message: `Rescheduling is not allowed within ${RESCHEDULE_WINDOW_HOURS} hours of the booking start time.`
+                });
+                return;
+            }
+
+            // 6b. Check new slot availability (throws if taken/blocked)
             await validateSlotAvailability(tx, lockedBooking.court_id, newDate, newStartTime);
 
-            // 7c. Record old values before mutation
+            // 6c. Record old values before mutation
             const oldDate = lockedBooking.date;
             const oldStartTime = lockedBooking.start_time;
 
-            // 7d. Update the existing booking with new slot details (in-place, status stays CONFIRMED)
+            // 6d. Update the existing booking with new slot details (in-place, status stays CONFIRMED)
             // Defensive check: explicitly including user_id in the where clause even if already verified
             await tx.bookings.update({
                 where: { booking_id, user_id: userId },
@@ -172,7 +172,7 @@ export const rescheduleBooking = async (req: Request, res: Response): Promise<vo
                 }
             });
 
-            // 7e. Write the reschedule history record
+            // 6e. Write the reschedule history record
             await tx.reschedules.create({
                 data: {
                     booking_id,
@@ -184,7 +184,7 @@ export const rescheduleBooking = async (req: Request, res: Response): Promise<vo
             });
         });
 
-        // ── 8. Return the updated booking ─────────────────────────────────────
+        // ── 7. Return the updated booking ─────────────────────────────────────
         const updatedBooking = await prisma.bookings.findUnique({
             where: { booking_id },
             include: {
