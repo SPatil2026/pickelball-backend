@@ -8,7 +8,7 @@ config(); // Loads .env file automatically
 const app = express();
 
 app.use(cors({
-    origin: "http://localhost:5173 ",
+    origin: "https://pickelball-app.vercel.app",
     credentials: true
 }));
 
