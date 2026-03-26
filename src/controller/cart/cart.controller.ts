@@ -33,9 +33,29 @@ export const getCart = async (req: Request, res: Response): Promise<void> => {
             return;
         }
 
-        const total_amount = cart.items.reduce((acc, item) => acc + item.price, 0);
+        const itemsWithStatus = await Promise.all(cart.items.map(async (item) => {
+            let is_booked = false;
+            try {
+                // check if the exact slot is blocked or confirmed by someone else
+                await validateSlotAvailability(prisma, item.court_id, item.date, item.start_time);
+            } catch (error) {
+                is_booked = true;
+            }
+            return {
+                ...item,
+                is_booked
+            };
+        }));
 
-        res.status(200).json({ cart, total_amount });
+        const total_amount = itemsWithStatus.reduce((acc, item) => acc + item.price, 0);
+
+        res.status(200).json({ 
+            cart: {
+                ...cart,
+                items: itemsWithStatus
+            }, 
+            total_amount 
+        });
     } catch (error) {
         console.error("[getCart]", error);
         res.status(500).json({ message: "Internal server error" });
