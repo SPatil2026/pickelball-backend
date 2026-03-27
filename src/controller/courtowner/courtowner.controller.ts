@@ -121,30 +121,34 @@ export const deleteVenue = async (req: Request, res: Response) => {
             return res.status(403).json({ message: "You do not have permission to delete this venue." });
         }
 
-        const deletedVenue = await prisma.$transaction(async (tx) => {
-            // Delete child records first
-            await tx.courtImages.deleteMany({
-                where: { venue_id }
-            });
-
-            await tx.pricing.deleteMany({
-                where: { venue_id }
-            });
-
-            await tx.court.deleteMany({
-                where: { venue_id }
-            });
-
-            // Then delete venue
-            const venue = await tx.venue.delete({
-                where: { venue_id }
-            });
-
-            return venue;
+        // Fetch IDs outside the transaction to keep it fast
+        const courts = await prisma.court.findMany({
+            where: { venue_id },
+            select: { court_id: true }
         });
+        const courtIds = courts.map(c => c.court_id);
+
+        const bookings = await prisma.bookings.findMany({
+            where: { court_id: { in: courtIds } },
+            select: { booking_id: true }
+        });
+        const bookingIds = bookings.map(b => b.booking_id);
+
+        // Run only delete operations inside the transaction
+        const deletedVenue = await prisma.$transaction([
+            prisma.courtImages.deleteMany({ where: { venue_id } }),
+            prisma.pricing.deleteMany({ where: { venue_id } }),
+            prisma.courtSlots.deleteMany({ where: { court_id: { in: courtIds } } }),
+            prisma.cartItems.deleteMany({ where: { court_id: { in: courtIds } } }),
+            prisma.payments.deleteMany({ where: { booking_id: { in: bookingIds } } }),
+            prisma.reschedules.deleteMany({ where: { booking_id: { in: bookingIds } } }),
+            prisma.bookings.deleteMany({ where: { court_id: { in: courtIds } } }),
+            prisma.court.deleteMany({ where: { venue_id } }),
+            prisma.venue.delete({ where: { venue_id } }),
+        ]);
 
 
-        return res.status(200).json({ message: "Venue deleted successfully", venue: deletedVenue });
+        return res.status(200).json({ message: "Venue deleted successfully", venue: deletedVenue[deletedVenue.length - 1] });
 
     } catch (err) {
         console.error("[deleteVenue]", err);
