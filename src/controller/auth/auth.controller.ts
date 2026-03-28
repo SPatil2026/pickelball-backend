@@ -7,8 +7,8 @@ import { Role } from "@prisma/client";
 
 const COOKIE_OPTIONS = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict" as const,
+    secure: true,
+    sameSite: "none" as const,
     signed: true,
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 };

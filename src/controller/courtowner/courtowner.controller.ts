@@ -5,10 +5,6 @@ export const createVenue = async (req: Request, res: Response) => {
     const userId = res.locals.jwtData.user_id;
     const { name, address, contact_number, email, opening_time, closing_time } = req.body;
 
-    if (!name || !address || !contact_number || !email || !opening_time || !closing_time) {
-        return res.status(400).json({ message: "All fields are required" });
-    }
-
     try {
 
         const result = await prisma.$transaction(async (tx) => {
@@ -18,8 +14,8 @@ export const createVenue = async (req: Request, res: Response) => {
                     address,
                     contact_number,
                     email,
-                    opening_time,
-                    closing_time,
+                    opening_time: new Date(opening_time),
+                    closing_time: new Date(closing_time),
                     owner_id: userId,
                 },
             });
@@ -48,13 +44,72 @@ export const createVenue = async (req: Request, res: Response) => {
     }
 }
 
+export const getOnwerVenue = async (req: Request, res: Response) => {
+    const userId = res.locals.jwtData.user_id;
+
+    try {
+        const venues = await prisma.venue.findMany({
+            where: { owner_id: userId },
+            include: {
+                courts: true,
+                pricing: true,
+                images: {
+                    where: {
+                        is_thumbnail: true
+                    },
+                    select: {
+                        image_url: true
+                    }
+                }
+            }
+        });
+        return res.status(200).json({ message: "Venues fetched successfully", venues });
+    } catch (error) {
+        console.error("[getOnwerVenue]", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+}
+
+export const getOwnerVenueById = async (req: Request, res: Response) => {
+    const userId = res.locals.jwtData.user_id;
+    const venue_id = req.params.venue_id as string;
+
+    try {
+        const venue = await prisma.venue.findFirst({
+            where: { venue_id, owner_id: userId },
+            select: {
+                venue_id: true,
+                name: true,
+                address: true,
+                contact_number: true,
+                email: true,
+                opening_time: true,
+                closing_time: true,
+                _count: {
+                    select: {
+                        courts: true,
+                        pricing: true
+                    }
+                },
+                images: {
+                    select: {
+                        image_url: true,
+                        is_thumbnail: true
+                    }
+                }
+
+            }
+        });
+        return res.status(200).json({ message: "Venue fetched successfully", venue });
+    } catch (error) {
+        console.error("[getOwnerVenueById]", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+}
+
 export const deleteVenue = async (req: Request, res: Response) => {
     const userId = res.locals.jwtData.user_id;
-    const { venue_id } = req.body;
-
-    if (!venue_id) {
-        return res.status(400).json({ message: "Venue ID is required!" });
-    }
+    const venue_id = req.params.venue_id as string;
 
     try {
         // Verify ownership
@@ -66,13 +121,34 @@ export const deleteVenue = async (req: Request, res: Response) => {
             return res.status(403).json({ message: "You do not have permission to delete this venue." });
         }
 
-        const deletedVenue = await prisma.venue.delete({
-            where: {
-                venue_id
-            },
+        // Fetch IDs outside the transaction to keep it fast
+        const courts = await prisma.court.findMany({
+            where: { venue_id },
+            select: { court_id: true }
         });
+        const courtIds = courts.map(c => c.court_id);
 
-        return res.status(200).json({ message: "Venue deleted successfully", venue: deletedVenue });
+        const bookings = await prisma.bookings.findMany({
+            where: { court_id: { in: courtIds } },
+            select: { booking_id: true }
+        });
+        const bookingIds = bookings.map(b => b.booking_id);
+
+        // Run only delete operations inside the transaction
+        const deletedVenue = await prisma.$transaction([
+            prisma.courtImages.deleteMany({ where: { venue_id } }),
+            prisma.pricing.deleteMany({ where: { venue_id } }),
+            prisma.courtSlots.deleteMany({ where: { court_id: { in: courtIds } } }),
+            prisma.cartItems.deleteMany({ where: { court_id: { in: courtIds } } }),
+            prisma.payments.deleteMany({ where: { booking_id: { in: bookingIds } } }),
+            prisma.reschedules.deleteMany({ where: { booking_id: { in: bookingIds } } }),
+            prisma.bookings.deleteMany({ where: { court_id: { in: courtIds } } }),
+            prisma.court.deleteMany({ where: { venue_id } }),
+            prisma.venue.delete({ where: { venue_id } }),
+        ]);
+
+
+        return res.status(200).json({ message: "Venue deleted successfully", venue: deletedVenue[deletedVenue.length - 1] });
 
     } catch (err) {
         console.error("[deleteVenue]", err);
@@ -84,10 +160,6 @@ export const createCourt = async (req: Request, res: Response) => {
     const userId = res.locals.jwtData.user_id;
     const { venue_id, court_number } = req.body;
 
-    if (!venue_id || !court_number) {
-        return res.status(400).json({ message: "All fields are required!" });
-    }
-
     try {
         // Verify ownership
         const venue = await prisma.venue.findFirst({
@@ -96,6 +168,14 @@ export const createCourt = async (req: Request, res: Response) => {
 
         if (!venue) {
             return res.status(403).json({ message: "You do not have permission to add courts to this venue." });
+        }
+
+        const existingCourt = await prisma.court.findFirst({
+            where: { venue_id, court_number }
+        });
+
+        if (existingCourt) {
+            return res.status(400).json({ message: "Court already exists." });
         }
 
         const court = await prisma.court.create({
@@ -116,10 +196,6 @@ export const createCourt = async (req: Request, res: Response) => {
 export const removeCourt = async (req: Request, res: Response) => {
     const userId = res.locals.jwtData.user_id;
     const { court_id } = req.body;
-
-    if (!court_id) {
-        return res.status(400).json({ message: "Court ID is required!" });
-    }
 
     try {
         // Verify ownership via venue
@@ -209,12 +285,6 @@ export const updateVenue = async (req: Request, res: Response): Promise<void> =>
     const venue_id = req.params.venue_id as string;
     const { name, address, contact_number, email, opening_time, closing_time } = req.body;
 
-    // At least one field must be provided
-    if (!name && !address && !contact_number && !email && !opening_time && !closing_time) {
-        res.status(400).json({ message: "At least one field is required to update." });
-        return;
-    }
-
     try {
         // Verify the venue belongs to this owner
         const venue = await prisma.venue.findFirst({
@@ -249,32 +319,7 @@ export const setPricing = async (req: Request, res: Response): Promise<void> => 
     const userId = res.locals.jwtData.user_id;
     const venue_id = req.params.venue_id as string;
 
-    // Expecting: [{ day_type: "WEEKDAY" | "WEEKEND", price_per_hour: number }]
-    const { pricing } = req.body as {
-        pricing: { day_type: "WEEKDAY" | "WEEKEND"; price_per_hour: number }[];
-    };
-
-    if (!Array.isArray(pricing) || pricing.length === 0) {
-        res.status(400).json({ message: "pricing must be a non-empty array of { day_type, price_per_hour }." });
-        return;
-    }
-
-    for (const entry of pricing) {
-        if (!entry.day_type || !entry.price_per_hour) {
-            res.status(400).json({ message: "Each pricing entry must include day_type and price_per_hour." });
-            return;
-        }
-
-        if (entry.day_type !== "WEEKDAY" && entry.day_type !== "WEEKEND") {
-            res.status(400).json({ message: "day_type must be WEEKDAY or WEEKEND." });
-            return;
-        }
-
-        if (typeof entry.price_per_hour !== "number" || entry.price_per_hour <= 0) {
-            res.status(400).json({ message: "price_per_hour must be a positive number." });
-            return;
-        }
-    }
+    const { pricing } = req.body;
 
     try {
         // Verify the venue belongs to this owner
@@ -310,6 +355,58 @@ export const setPricing = async (req: Request, res: Response): Promise<void> => 
         res.status(200).json({ message: "Pricing set successfully.", pricing: results });
     } catch (error) {
         console.error("[setPricing]", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+}
+
+export const getOwnerDashboard = async (req: Request, res: Response) => {
+    const userId = res.locals.jwtData.user_id;
+
+    if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+        const totalVenues = await prisma.venue.count({
+            where: {
+                owner_id: userId
+            }
+        });
+
+        const totalCourts = await prisma.court.count({
+            where: {
+                venue: {
+                    owner_id: userId
+                }
+            }
+        });
+
+        const totalBookings = await prisma.bookings.count({
+            where: {
+                court: {
+                    venue: {
+                        owner_id: userId
+                    }
+                }
+            }
+        });
+
+        const totalRevenue = await prisma.bookings.aggregate({
+            where: {
+                court: {
+                    venue: {
+                        owner_id: userId
+                    }
+                }
+            },
+            _sum: {
+                total_amount: true
+            }
+        });
+
+        res.status(200).json({ message: "Owner dashboard fetched successfully", totalVenues, totalCourts, totalBookings, totalRevenue });
+    } catch (error) {
+        console.error("[getOwnerDashboard]", error);
         res.status(500).json({ message: "Internal server error" });
     }
 }

@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import prisma from "../../db/prisma.js";
 import { combineDateAndTime } from "../../utils/time.utils.js";
 import { validateSlotAvailability } from "../../utils/booking.utils.js";
+import { DayType, SlotStatus } from "@prisma/client";
 
 export const getCart = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -18,16 +19,43 @@ export const getCart = async (req: Request, res: Response): Promise<void> => {
                             }
                         }
                     }
+                },
+                _count: {
+                    select: {
+                        items: true
+                    }
                 }
             }
         });
 
         if (!cart) {
-            res.status(200).json({ items: [] });
+            res.status(200).json({ items: [], total_amount: 0 });
             return;
         }
 
-        res.status(200).json(cart);
+        const itemsWithStatus = await Promise.all(cart.items.map(async (item) => {
+            let is_booked = false;
+            try {
+                // check if the exact slot is blocked or confirmed by someone else
+                await validateSlotAvailability(prisma, item.court_id, item.date, item.start_time);
+            } catch (error) {
+                is_booked = true;
+            }
+            return {
+                ...item,
+                is_booked
+            };
+        }));
+
+        const total_amount = itemsWithStatus.reduce((acc, item) => acc + item.price, 0);
+
+        res.status(200).json({ 
+            cart: {
+                ...cart,
+                items: itemsWithStatus
+            }, 
+            total_amount 
+        });
     } catch (error) {
         console.error("[getCart]", error);
         res.status(500).json({ message: "Internal server error" });
@@ -38,11 +66,6 @@ export const addToCart = async (req: Request, res: Response): Promise<void> => {
     try {
         const userId = res.locals.jwtData.user_id;
         const { court_id, date, start_time, end_time } = req.body;
-
-        if (!court_id || !date || !start_time || !end_time) {
-            res.status(400).json({ message: "All fields are required" });
-            return;
-        }
 
         // 1. Process dates + times exactly like the availability checker (UTC)
         const bookingDate = new Date(date as string);
@@ -118,7 +141,7 @@ export const addToCart = async (req: Request, res: Response): Promise<void> => {
         // get if the day of booking is weekday or weekend
         const dayOfWeek = bookingDate.getDay();
         const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
-        const dayType = isWeekday ? "WEEKDAY" : "WEEKEND";
+        const dayType = isWeekday ? DayType.WEEKDAY : DayType.WEEKEND;
 
         // get the pricing from the pricing table for that court
         const pricing = await prisma.pricing.findFirst({
@@ -140,7 +163,7 @@ export const addToCart = async (req: Request, res: Response): Promise<void> => {
                 start_time: reqStartTime,
                 end_time: reqEndTime,
                 price: pricing?.price_per_hour || 0,
-                status: "IN_CART"
+                status: SlotStatus.IN_CART
             }
         });
 
@@ -157,8 +180,8 @@ export const removeFromCart = async (req: Request, res: Response): Promise<void>
         const userId = res.locals.jwtData.user_id;
         const { cart_item_id } = req.params;
 
-        if (!cart_item_id) {
-            res.status(400).json({ message: "Cart item ID is required" });
+        if (!cart_item_id || cart_item_id === "undefined") {
+            res.status(400).json({ message: "Cart item ID is required." });
             return;
         }
 
@@ -188,18 +211,18 @@ export const clearCart = async (req: Request, res: Response): Promise<void> => {
     try {
         const userId = res.locals.jwtData.user_id;
 
-        const cart = await prisma.cart.findFirst({
-            where: { user_id: userId }
+        const result = await prisma.cartItems.deleteMany({
+            where: {
+                cart: {
+                    user_id: userId
+                }
+            }
         });
 
-        if (!cart) {
+        if (result.count === 0) {
             res.status(200).json({ message: "Cart is already empty." });
             return;
         }
-
-        await prisma.cartItems.deleteMany({
-            where: { cart_id: cart.cart_id }
-        });
 
         res.status(200).json({ message: "Cart cleared successfully." });
     } catch (error) {

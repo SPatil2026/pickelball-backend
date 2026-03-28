@@ -1,19 +1,27 @@
 import { Request, Response } from "express";
 import prisma from "../../db/prisma.js";
 import { generateTimeIntervals, formatTimeToUTC, combineDateAndTime } from "../../utils/time.utils.js";
+import { BookingStatus, SlotStatus } from "@prisma/client";
 
 export const getVenue = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { date, time } = req.query;
-
-        const today = new Date().setUTCHours(0, 0, 0, 0);
-
-        if (date && new Date(date as string) < new Date(today)) {
-            res.status(400).json({ message: "Date cannot be in the past" });
-            return;
-        }
+        const { date, time, address } = req.query;
 
         let whereClause: any = {};
+
+        if (address) {
+            whereClause.address = {
+                contains: address as string,
+                mode: 'insensitive'
+            };
+        }
+
+        // if (name) {
+        //     whereClause.name = {
+        //         contains: name as string,
+        //         mode: 'insensitive'
+        //     };
+        // }
 
         if (date && time) {
             const bookingDate = new Date(date as string);
@@ -23,9 +31,9 @@ export const getVenue = async (req: Request, res: Response): Promise<void> => {
             whereClause.courts = {
                 some: {
                     AND: [
-                        { bookings: { none: { date: bookingDate, start_time: reqStartTime, status: 'CONFIRMED' } } },
-                        { slots: { none: { date: bookingDate, start_time: reqStartTime, status: 'BLOCKED' } } },
-                        { cartItems: { none: { date: bookingDate, start_time: reqStartTime, status: 'IN_CART' } } }
+                        { bookings: { none: { date: bookingDate, start_time: reqStartTime, status: BookingStatus.CONFIRMED } } },
+                        { slots: { none: { date: bookingDate, start_time: reqStartTime, status: SlotStatus.BLOCKED } } },
+                        { cartItems: { none: { date: bookingDate, start_time: reqStartTime, status: SlotStatus.IN_CART } } }
                     ]
                 }
             };
@@ -50,9 +58,11 @@ export const getVenue = async (req: Request, res: Response): Promise<void> => {
                     }
                 },
                 images: {
-                    select: {
-                        image_url: true,
+                    where: {
                         is_thumbnail: true
+                    },
+                    select: {
+                        image_url: true
                     }
                 }
             }
@@ -79,11 +89,6 @@ export const getVenue = async (req: Request, res: Response): Promise<void> => {
 export const getVenueById = async (req: Request, res: Response): Promise<void> => {
     try {
         const venue_id = req.params.venue_id as string;
-
-        if (!venue_id) {
-            res.status(400).json({ message: "Venue ID is required" });
-            return;
-        }
 
         const venue = await prisma.venue.findUnique({
             where: { venue_id },
@@ -131,18 +136,6 @@ export const getAvailableSlots = async (req: Request, res: Response): Promise<vo
     const venue_id = req.params.venue_id as string;
     const { date } = req.query;
     const userId = res.locals.jwtData.user_id;
-
-    if (!venue_id || !date) {
-        res.status(400).json({ message: "venue_id and date are required" });
-        return;
-    }
-
-    const today = new Date().setUTCHours(0, 0, 0, 0);
-
-    if (new Date(date as string) < new Date(today)) {
-        res.status(400).json({ message: "Date cannot be in the past" });
-        return;
-    }
 
     try {
         const parsedDate = new Date(date as string);
@@ -192,7 +185,7 @@ export const getAvailableSlots = async (req: Request, res: Response): Promise<vo
                     gte: startOfDay,
                     lte: endOfDay
                 },
-                status: "CONFIRMED"
+                status: BookingStatus.CONFIRMED
             }
         });
 
@@ -204,7 +197,7 @@ export const getAvailableSlots = async (req: Request, res: Response): Promise<vo
                     gte: startOfDay,
                     lte: endOfDay
                 },
-                status: "BLOCKED"
+                status: SlotStatus.BLOCKED
             }
         });
 
@@ -219,7 +212,7 @@ export const getAvailableSlots = async (req: Request, res: Response): Promise<vo
                     gte: startOfDay,
                     lte: endOfDay
                 },
-                status: "IN_CART"
+                status: SlotStatus.IN_CART
             }
         });
 

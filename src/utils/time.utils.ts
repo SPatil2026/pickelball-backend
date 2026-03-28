@@ -1,4 +1,5 @@
 export const RESCHEDULE_WINDOW_HOURS = 12;
+export const CANCEL_WINDOW_HOURS = 12;
 
 export const formatTimeToUTC = (date: Date): string => {
     return date.toLocaleTimeString('en-US', {

@@ -65,6 +65,8 @@ model Venue {
   courts         Court[]
   images         CourtImages[]
   pricing        Pricing[]
+
+  @@index([owner_id])
 }
 
 model Court {
@@ -77,6 +79,8 @@ model Court {
   slots      CourtSlots[]
   bookings   Bookings[]
   cartItems  CartItems[]
+
+  @@index([venue_id])
 }
 
 model CourtImages {
@@ -86,6 +90,8 @@ model CourtImages {
   is_thumbnail Boolean @default(false)
 
   venue        Venue   @relation(fields: [venue_id], references: [venue_id])
+
+  @@index([venue_id])
 }
 
 model Pricing {
@@ -108,6 +114,9 @@ model CourtSlots {
   status      SlotStatus
 
   court       Court      @relation(fields: [court_id], references: [court_id])
+
+  @@index([court_id, date])
+  @@index([date, start_time])
 }
 
 model Bookings {
@@ -127,7 +136,9 @@ model Bookings {
   payments     Payments[]
   reschedules  Reschedules[]
 
-  @@unique([court_id, date, start_time, end_time])
+  @@unique([court_id, date, start_time, end_time, created_at])
+  @@index([court_id, date])
+  @@index([user_id])
 }
 
 
@@ -155,6 +166,8 @@ model CartItems {
   court        Court    @relation(fields: [court_id], references: [court_id])
 
   @@unique([cart_id, court_id, date, start_time])
+  @@index([court_id, date])
+  @@index([cart_id])
 }
 
 model Payments {
@@ -164,6 +177,8 @@ model Payments {
   paid_at        DateTime
 
   booking        Bookings @relation(fields: [booking_id], references: [booking_id])
+
+  @@index([booking_id])
 }
 
 model Reschedules {
@@ -176,4 +191,6 @@ model Reschedules {
   rescheduled_at DateTime @default(now())
 
   booking        Bookings @relation(fields: [booking_id], references: [booking_id])
+
+  @@index([booking_id])
 }
