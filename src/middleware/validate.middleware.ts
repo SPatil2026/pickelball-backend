@@ -17,9 +17,9 @@ export const validate = (schema: ZodObject) => async (req: Request, res: Respons
     } catch (error) {
         // If error is instance of ZodError then return error to client to show it to user
         if (error instanceof ZodError) {
-            return res.status(400).send({ msg: error.issues[0].message });
+            return res.status(400).send({ message: error.issues[0].message });
         }
 
-        return res.status(500).send("Error making request, contact support");
+        return res.status(500).send({ message: "Error making request, contact support" });
     }
 };
