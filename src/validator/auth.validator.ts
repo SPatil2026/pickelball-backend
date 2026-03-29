@@ -9,7 +9,7 @@ export const registerSchema = z.object({
             .email("Invalid email address")
             .regex(/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/, "Invalid email address"),
         password: z.string()
-            .min(6, "Password must be at least 6 characters long")
+            .min(8, "Password must be at least 8 characters long")
             .regex(/[a-zA-Z]/, "Password must contain at least one letter")
             .regex(/\d/, "Password must contain at least one number"),
         phone: z.string()
@@ -25,7 +25,7 @@ export const loginSchema = z.object({
             .email("Invalid email address")
             .regex(/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/, "Invalid email address"),
         password: z.string()
-            .min(6, "Password must be at least 6 characters long")
+            .min(8, "Password must be at least 8 characters long")
             .regex(/[a-zA-Z]/, "Password must contain at least one letter")
             .regex(/\d/, "Password must contain at least one number"),
     })
