@@ -21,31 +21,41 @@ export const combineDateAndTime = (date: string | Date, timeStr: string): Date =
     return combined;
 };
 
-export const generateTimeIntervals = (openingTime: Date, closingTime: Date) => {
+export const generateTimeIntervals = (openingTime: Date, closingTime: Date, targetDate: Date) => {
     const intervals: { start_time: string; end_time: string }[] = [];
 
-    // Create new Date objects to avoid mutating the originals
     const current = new Date(openingTime);
     const end = new Date(closingTime);
 
-    // Ensure they are on the same day for comparison logic
-    // We just care about the time portion for generating intervals 
-    // If closing time is past midnight, it would ideally be handled, but for standard operations we assume same day.
+    const now = new Date();
+
+    const isToday = targetDate.toLocaleDateString() === now.toLocaleDateString();
+
+    // get curernt time to match the intervals format(HH:MM:SS)
+    const currentLocalTimeStr = now.getHours().toString().padStart(2, '0') + ":" +
+        now.getMinutes().toString().padStart(2, '0') + ":" +
+        now.getSeconds().toString().padStart(2, '0');
 
     while (current < end) {
         const startStr = formatTimeToUTC(current);
 
-        // Add 1 hour safely using milliseconds
-        current.setTime(current.getTime() + 60 * 60 * 1000);
+        const intervalEnd = new Date(current);
+        intervalEnd.setTime(intervalEnd.getTime() + 60 * 60 * 1000);
 
-        // Don't add intervals that go past closing time
-        if (current <= end) {
-            const endStr = formatTimeToUTC(current);
-            intervals.push({
-                start_time: startStr,
-                end_time: endStr
-            });
+        if (intervalEnd > end) break;
+
+        const endStr = formatTimeToUTC(intervalEnd);
+        if (isToday && startStr < currentLocalTimeStr) {
+            current.setTime(intervalEnd.getTime());
+            continue;
         }
+
+        intervals.push({
+            start_time: startStr,
+            end_time: endStr
+        });
+
+        current.setTime(intervalEnd.getTime());
     }
 
     return intervals;

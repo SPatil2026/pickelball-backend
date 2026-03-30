@@ -167,7 +167,7 @@ export const getAvailableSlots = async (req: Request, res: Response): Promise<vo
         }
 
         // 2. Generate all intervals
-        const allIntervals = generateTimeIntervals(venue.opening_time, venue.closing_time);
+        const allIntervals = generateTimeIntervals(venue.opening_time, venue.closing_time, parsedDate);
 
         // 3. Get existing bookings for the day across all courts in this venue
         const startOfDay = new Date(parsedDate);
