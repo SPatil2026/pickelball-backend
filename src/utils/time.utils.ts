@@ -39,23 +39,20 @@ export const generateTimeIntervals = (openingTime: Date, closingTime: Date, targ
     while (current < end) {
         const startStr = formatTimeToUTC(current);
 
-        const intervalEnd = new Date(current);
-        intervalEnd.setTime(intervalEnd.getTime() + 60 * 60 * 1000);
+        current.setTime(current.getTime() + 60 * 60 * 1000);
 
-        if (intervalEnd > end) break;
-
-        const endStr = formatTimeToUTC(intervalEnd);
         if (isToday && startStr < currentLocalTimeStr) {
-            current.setTime(intervalEnd.getTime());
+            current.setTime(current.getTime());
             continue;
         }
 
-        intervals.push({
-            start_time: startStr,
-            end_time: endStr
-        });
-
-        current.setTime(intervalEnd.getTime());
+        if (current <= end) {
+            const endStr = formatTimeToUTC(current);
+            intervals.push({
+                start_time: startStr,
+                end_time: endStr
+            });
+        }
     }
 
     return intervals;
